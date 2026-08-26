@@ -25,9 +25,16 @@ public enum WindowFinder {
     /// Returns `nil` when nothing clears the bar. That case must be reported
     /// plainly rather than by naming the least-bad hours — a window the app
     /// recommends is a window the user will drive to.
+    /// The score at or above which an hour is worth driving to.
+    ///
+    /// Shared with `ScoreBand` so the recommendation and the colour cannot
+    /// disagree: a row painted as usable that the window finder then refuses to
+    /// recommend is the app telling the user two different things at once.
+    public static let usableScore = 40
+
     public static func bestWindow(
         in hours: [HourlyForecast],
-        minimumScore: Int = 40
+        minimumScore: Int = usableScore
     ) -> SessionWindow? {
         var best: SessionWindow?
         var runStart: Int?
@@ -77,7 +84,7 @@ public enum WindowFinder {
     public static func dailyWindows(
         in hours: [HourlyForecast],
         calendar: Calendar = .israelStandard,
-        minimumScore: Int = 40
+        minimumScore: Int = usableScore
     ) -> [(day: Date, window: SessionWindow?, peakScore: Int)] {
         let grouped = Dictionary(grouping: hours) { hour in
             calendar.startOfDay(for: hour.conditions.timestamp)

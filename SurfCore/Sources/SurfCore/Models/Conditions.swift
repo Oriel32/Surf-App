@@ -15,16 +15,22 @@ public enum WaveBand: String, Sendable, Equatable, CaseIterable {
     case overhead
     case doubleOverhead
 
-    /// Lower bound in metres, inclusive.
+    /// The band boundaries, as one readable table a local surfer can check
+    /// line by line. `RuleTable` rejects a non-ascending edit outright, so the
+    /// bands cannot be left overlapping or out of order by a later change.
+    public static let table = RuleTable<WaveBand>([
+        .init(from: 0, .flat),
+        .init(from: 0.20, .ankleToKnee),
+        .init(from: 0.50, .waistToChest),
+        .init(from: 1.00, .shoulderToHead),
+        .init(from: 1.50, .overhead),
+        .init(from: 2.20, .doubleOverhead)
+    ])
+
+    /// Lower bound in metres, inclusive. Read back from the table, so a
+    /// threshold is never stated in two places that can drift apart.
     public var lowerBoundMeters: Double {
-        switch self {
-        case .flat: return 0
-        case .ankleToKnee: return 0.20
-        case .waistToChest: return 0.50
-        case .shoulderToHead: return 1.00
-        case .overhead: return 1.50
-        case .doubleOverhead: return 2.20
-        }
+        Self.table.lowerBound(of: self) ?? 0
     }
 
     public var hebrew: String {
@@ -52,7 +58,7 @@ public enum WaveBand: String, Sendable, Equatable, CaseIterable {
     }
 
     public static func band(forHeightMeters height: Double) -> WaveBand {
-        allCases.last { height >= $0.lowerBoundMeters } ?? .flat
+        table.value(for: height)
     }
 }
 
@@ -71,7 +77,7 @@ public enum SeaState: String, Sendable, Equatable, CaseIterable {
         // glassy-or-choppy misdescribes most real days, so this middle state
         // uses plain Hebrew rather than invented slang. Confirm the wording.
         case .fair: return "סביר"
-        case .choppy: return "צ'ופי"
+        case .choppy: return "צ׳ופי"
         }
     }
 
@@ -117,6 +123,13 @@ public struct SpotConditions: Sendable, Equatable {
 
     public var windSpeedKnots: Double {
         Units.knots(fromMetersPerSecond: windSpeedMPS)
+    }
+
+    /// The wind's strength band. Direction stays separate in `windRelation`:
+    /// 15 knots offshore and 15 knots onshore are the same band and opposite
+    /// products, and collapsing them into one adjective loses the product.
+    public var windStrength: WindStrength {
+        WindStrength.strength(forKnots: windSpeedKnots)
     }
 
     public init(

@@ -60,6 +60,15 @@ public actor ForecastRepository {
 
     private var cache: [String: CacheEntry] = [:]
 
+    /// The last forecast that fetched cleanly, deliberately kept past its TTL
+    /// and past a failure.
+    ///
+    /// This is what lets `forecastState(for:profile:)` answer `.stale` rather
+    /// than `.failed` when the network drops. A forty-minute-old forecast with
+    /// its age printed on it is far more use to someone standing on the sand
+    /// than an error screen, and the age is what makes showing it honest.
+    private var lastKnownGood: [String: (forecast: SpotForecast, at: Date)] = [:]
+
     /// - Parameters:
     ///   - cacheTTL: model runs land on fixed cycles (00Z/12Z) and buoys update
     ///     hourly, so refetching more often than this buys nothing and, for
@@ -82,8 +91,14 @@ public actor ForecastRepository {
         self.clock = clock
     }
 
+    private func cacheKey(spot: Spot, profile: UserProfile) -> String {
+        "\(spot.id)|\(profile.sport.rawValue)|\(profile.skill.rawValue)"
+    }
+
+    /// Throws on failure. Callers that would rather show an old forecast than an
+    /// error want `forecastState(for:profile:)`.
     public func forecast(for spot: Spot, profile: UserProfile) async throws -> SpotForecast {
-        let key = "\(spot.id)|\(profile.sport.rawValue)|\(profile.skill.rawValue)"
+        let key = cacheKey(spot: spot, profile: profile)
 
         if let entry = cache[key] {
             switch entry {
@@ -102,7 +117,9 @@ public actor ForecastRepository {
 
         do {
             let forecast = try await task.value
-            cache[key] = .ready(forecast, cachedAt: clock())
+            let now = clock()
+            cache[key] = .ready(forecast, cachedAt: now)
+            lastKnownGood[key] = (forecast, now)
             return forecast
         } catch {
             cache[key] = nil  // allow a retry after failure
@@ -110,8 +127,37 @@ public actor ForecastRepository {
         }
     }
 
-    public func invalidate() {
+    /// The same fetch, resolved into the four states a screen has to render.
+    ///
+    /// Never throws. A failure with nothing behind it is `.failed`; a failure
+    /// with a previously good forecast behind it is `.stale`, carrying the age
+    /// the view is then obliged to label it with. That is the difference between
+    /// "the app is broken" and "this is from 40 minutes ago", and this is the
+    /// only layer that knows which one is true.
+    public func forecastState(
+        for spot: Spot,
+        profile: UserProfile
+    ) async -> DataState<SpotForecast> {
+        do {
+            return .loaded(try await forecast(for: spot, profile: profile))
+        } catch {
+            let key = cacheKey(spot: spot, profile: profile)
+            guard let previous = lastKnownGood[key] else {
+                return .failed(reason: String(describing: error))
+            }
+            return .stale(previous.forecast, age: clock().timeIntervalSince(previous.at))
+        }
+    }
+
+    /// Forces the next request to refetch.
+    ///
+    /// - Parameter discardingLastKnownGood: off by default. Pull-to-refresh means
+    ///   "get me something fresher", not "throw away the only forecast you have
+    ///   if the network is down" — keeping the fallback is what stops a refresh
+    ///   on a bad connection from turning a working screen into an error.
+    public func invalidate(discardingLastKnownGood: Bool = false) {
         cache.removeAll()
+        if discardingLastKnownGood { lastKnownGood.removeAll() }
     }
 
     // MARK: - Assembly

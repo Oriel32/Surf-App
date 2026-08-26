@@ -33,8 +33,13 @@ public struct IsramarClient: ObservationSource {
     public init(transport: (any HTTPTransport)? = nil) {
         // A retry here is cheap and this endpoint is unmanaged scraped JSON, but
         // the forecast never waits on it: `ForecastRepository` treats a failure
-        // as `.unavailable` either way.
-        self.transport = transport ?? RetryingTransport(wrapping: URLSessionTransport())
+        // as `.unavailable` either way. The cache is sized to the buoy's hourly
+        // cadence, which also means a screen full of spots sharing one station
+        // hits the network once rather than once per spot.
+        self.transport = transport ?? CachingTransport(
+            wrapping: RetryingTransport(wrapping: URLSessionTransport()),
+            policy: .hourlyObservation
+        )
     }
 
     public func latestObservation(stationID: String) async throws -> BuoyObservation {

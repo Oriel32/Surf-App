@@ -208,27 +208,31 @@ public enum WaveTransform {
 
 /// Wind against water surface — the texture layer.
 public enum SeaStateClassifier {
+    /// - Parameter rules: the thresholds, injected so each edge can be moved and
+    ///   tested on its own rather than being a literal buried in a conditional.
     public static func classify(
         heightMeters: Double,
         windSpeedMPS: Double,
-        relation: WindRelation
+        relation: WindRelation,
+        rules: SeaStateRules = .standard
     ) -> SeaState {
-        guard heightMeters >= 0.1 else { return .flat }
+        guard heightMeters >= rules.flatCeilingMeters else { return .flat }
 
         let knots = Units.knots(fromMetersPerSecond: windSpeedMPS)
 
         // Glass needs either almost no wind at all, or a wind coming off the
         // land that grooms the face instead of tearing it.
-        if knots < 5 || (relation.isFavourableForShape && knots < 15) {
+        if knots < rules.glassyCalmKnots
+            || (relation.isFavourableForShape && knots < rules.groomedOffshoreCeilingKnots) {
             return .glassy
         }
 
         // Onshore wind past roughly 12 knots tears the surface and breaks waves
         // before they can form.
-        if (relation == .onshore || relation == .crossOnshore) && knots >= 12 {
+        if (relation == .onshore || relation == .crossOnshore) && knots >= rules.onshoreChopKnots {
             return .choppy
         }
 
-        return knots >= 20 ? .choppy : .fair
+        return knots >= rules.universalChopKnots ? .choppy : .fair
     }
 }

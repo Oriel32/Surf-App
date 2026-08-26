@@ -29,9 +29,15 @@ public struct OpenMeteoClient: ForecastSource {
     ///   Note that `meteofrance_wam` is **not** a valid Open-Meteo model id —
     ///   the API rejects it outright.
     public init(transport: (any HTTPTransport)? = nil, model: String = "best_match") {
-        // Retrying by default: this is the one source the screen cannot do
-        // without, so a single dropped connection must not empty the app.
-        self.transport = transport ?? RetryingTransport(wrapping: URLSessionTransport())
+        // Cache outermost, retry inside it: a repeat request costs nothing at
+        // all, and a request that needed three attempts is stored once under the
+        // URL that finally answered. Retrying is not optional here either, since
+        // this is the one source the screen cannot do without and a single
+        // dropped connection must not empty the app.
+        self.transport = transport ?? CachingTransport(
+            wrapping: RetryingTransport(wrapping: URLSessionTransport()),
+            policy: .modelRun
+        )
         self.model = model
     }
 

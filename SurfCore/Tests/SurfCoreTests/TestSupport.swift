@@ -119,3 +119,35 @@ extension SpotConditions {
 func mps(knots: Double) -> Double {
     Units.metersPerSecond(fromKnots: knots)
 }
+
+/// A clock the test can wind forward, so cache expiry and staleness are
+/// exercised without waiting through them in real time.
+///
+/// A locked class rather than an actor: `CachingTransport` and
+/// `ForecastRepository` both take a synchronous `@Sendable () -> Date`, and an
+/// actor's state cannot be read from one.
+final class MovableClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var current: Date
+
+    init(_ start: Date) {
+        self.current = start
+    }
+
+    var now: Date {
+        lock.lock()
+        defer { lock.unlock() }
+        return current
+    }
+
+    func advance(by interval: TimeInterval) {
+        lock.lock()
+        current = current.addingTimeInterval(interval)
+        lock.unlock()
+    }
+
+    /// Handed to the type under test.
+    var read: @Sendable () -> Date {
+        { self.now }
+    }
+}

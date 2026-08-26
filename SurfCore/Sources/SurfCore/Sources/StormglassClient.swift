@@ -29,9 +29,12 @@ public struct StormglassClient: ForecastSource, ModelEnsembleSource {
     ) {
         self.apiKey = apiKey
         // `.frugal`, not `.standard`: on a ten-requests-a-day budget an eager
-        // retry policy does not improve reliability, it removes the source.
-        self.transport = transport ?? RetryingTransport(
-            wrapping: URLSessionTransport(), policy: .frugal
+        // retry policy does not improve reliability, it removes the source. The
+        // cache is the other half of that defence, and it is a backstop rather
+        // than a fix — the real answer is the scheduled server-side job.
+        self.transport = transport ?? CachingTransport(
+            wrapping: RetryingTransport(wrapping: URLSessionTransport(), policy: .frugal),
+            policy: .rateLimited
         )
         self.models = models
     }
