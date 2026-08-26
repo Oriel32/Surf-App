@@ -84,6 +84,18 @@
     "buoyStationID": null
   },
   {
+    "id": "bat-yam",
+    "nameHebrew": "בת ים",
+    "nameEnglish": "Bat Yam",
+    "latitude": 32.0171,
+    "longitude": 34.7403,
+    "basin": "mediterranean",
+    "exposureCoefficient": 0.85,
+    "shorelineNormalDegrees": 270,
+    "breakDepthMeters": 2.0,
+    "buoyStationID": null
+  },
+  {
     "id": "palmachim",
     "nameHebrew": "פלמחים",
     "nameEnglish": "Palmachim",
