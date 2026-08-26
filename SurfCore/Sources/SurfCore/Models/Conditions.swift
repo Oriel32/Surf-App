@@ -130,6 +130,19 @@ public struct SpotConditions: Sendable, Equatable {
         Units.knots(fromMetersPerSecond: windSpeedMPS)
     }
 
+    /// The surf as a range: the significant breaking height through to the sets.
+    /// `waveHeightMeters` stays the physical value; this is how it is spoken.
+    public var surfRange: SurfRange {
+        SurfRange(significantMeters: waveHeightMeters)
+    }
+
+    /// Deep-water wave power at the break, kW/m. The quantity Surfline and
+    /// Magicseaweed lead with, because height alone cannot separate a 1 m
+    /// groundswell from 1 m of chop.
+    public var energyKilowattsPerMetre: Double {
+        0.5 * waveHeightMeters * waveHeightMeters * periodSeconds
+    }
+
     /// The wind's strength band. Direction stays separate in `windRelation`:
     /// 15 knots offshore and 15 knots onshore are the same band and opposite
     /// products, and collapsing them into one adjective loses the product.

@@ -118,40 +118,90 @@ public enum WaveTransform {
         }
     }
 
+    /// One transformed wave train at the break.
+    private struct BrokenTrain {
+        let heightMeters: Double
+        let periodSeconds: Double
+    }
+
     private static func transformMediterranean(_ sample: RawMarineSample, at spot: Spot) -> SpotConditions {
-        let train = sample.dominantTrain
-        let depth = spot.breakDepthMeters
+        // The tide moves the bar the wave breaks on. The Mediterranean range is
+        // only a few dozen centimetres, but the breaking cap is `0.78 x depth`,
+        // so on a 1.5 m bar even 0.2 m of tide moves the ceiling by 10 percent -
+        // and it is free, because the model already sends sea level.
+        //
+        // Floored well above zero: a bad model value must not produce a
+        // negative depth and a nonsense wave.
+        let depth = max(0.5, spot.breakDepthMeters + (sample.seaLevelMeters ?? 0))
+
+        // Every train on its own geometry. Taking the height from the combined
+        // sea while taking the period and bearing from the swell partition -
+        // which is what this did before - applies groundswell physics to a
+        // height that wind chop inflated.
+        let trains = sample.partitions.map { transform($0, at: spot, depthMeters: depth) }
+
+        // Independent trains add in ENERGY, so heights add in quadrature. Adding
+        // them linearly would double-count a sea that is mostly one train.
+        let combined = trains.reduce(0) { $0 + $1.heightMeters * $1.heightMeters }.squareRoot()
+
+        // The cap is depth-limited breaking, so it applies to the whole sea at
+        // the break, not to each train separately.
+        let height = min(combined, breakingHeightLimit(depthMeters: depth))
+
+        // The period reported is the dominant train's, never a blend: averaging
+        // a 9 s groundswell with a 3 s chop describes neither of them.
+        let dominant = trains.max { $0.heightMeters < $1.heightMeters }
+
+        return assemble(
+            sample: sample,
+            spot: spot,
+            heightMeters: height,
+            periodSeconds: dominant?.periodSeconds ?? 0,
+            isSynthetic: false
+        )
+    }
+
+    /// Shelter, shoal and refract a single train. Returns zero height when the
+    /// train arrives from behind the shoreline and cannot reach the beach.
+    private static func transform(
+        _ train: SwellComponent,
+        at spot: Spot,
+        depthMeters depth: Double
+    ) -> BrokenTrain {
+        // Peak period throughout: shoaling and refraction are both functions of
+        // wavelength, and the wavelength that matters is the energetic one.
+        let period = train.surfPeriodSeconds
+
+        // A sector the break simply cannot see - behind a mole or a headland -
+        // is shadowed, not merely reduced. The exposure coefficient is a scalar
+        // and cannot express "from that direction, nothing arrives".
+        if let window = spot.swellWindow, !window.admits(train.directionDegrees) {
+            return BrokenTrain(heightMeters: 0, periodSeconds: period)
+        }
 
         // Sheltering first: breakwaters, headlands and piers block incident
         // energy offshore, before the wave ever reaches the shoaling zone.
         // (The prose spec lists the coefficient last; applying it after the
         // breaking cap would reduce an already-capped height twice.)
-        let incidentHeight = sample.waveHeightMeters * spot.exposureCoefficient
+        let incidentHeight = train.heightMeters * spot.exposureCoefficient
 
         let incidentAngle = Compass.angularDistance(
             train.directionDegrees,
             spot.shorelineNormalDegrees
         )
 
-        let height: Double
-        if let refraction = refractionCoefficient(
-            periodSeconds: train.periodSeconds,
+        guard let refraction = refractionCoefficient(
+            periodSeconds: period,
             depthMeters: depth,
             incidentAngleDegrees: incidentAngle
-        ) {
-            let shoaling = shoalingCoefficient(periodSeconds: train.periodSeconds, depthMeters: depth)
-            let transformed = incidentHeight * shoaling * refraction
-            height = min(transformed, breakingHeightLimit(depthMeters: depth))
-        } else {
-            height = 0  // swell arrives from behind the beach
+        ) else {
+            return BrokenTrain(heightMeters: 0, periodSeconds: period)
         }
 
-        return assemble(
-            sample: sample,
-            spot: spot,
-            heightMeters: height,
-            periodSeconds: train.periodSeconds,
-            isSynthetic: false
+        let shoaling = shoalingCoefficient(periodSeconds: period, depthMeters: depth)
+        return BrokenTrain(
+            heightMeters: incidentHeight * shoaling * refraction,
+            periodSeconds: period
         )
     }
 
@@ -189,7 +239,11 @@ public enum WaveTransform {
             spotID: spot.id,
             waveHeightMeters: heightMeters,
             periodSeconds: periodSeconds,
-            band: WaveBand.band(forHeightMeters: heightMeters),
+            // Chosen from the sets rather than the significant height: nobody
+            // names a beach day after its statistical mean. See SurfRange.
+            band: WaveBand.band(
+                forHeightMeters: SurfRange(significantMeters: heightMeters).bandDefiningMeters
+            ),
             seaState: SeaStateClassifier.classify(
                 heightMeters: heightMeters,
                 windSpeedMPS: sample.windSpeedMPS,

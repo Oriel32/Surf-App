@@ -36,6 +36,10 @@ public struct ConditionsPresentation: Sendable, Equatable {
 
     /// One coherent sentence, not six fragments. VoiceOver reads meaning.
     public let accessibilityLabel: String
+
+    /// Wave power in kW/m, for the analytical layer. Height alone cannot
+    /// separate a groundswell from chop; this is the number that can.
+    public let energyText: String
 }
 
 /// Stage three of the pipeline: `SpotConditions` becomes words, bands and tokens.
@@ -56,7 +60,14 @@ public enum Translator {
         score: MatchScore? = nil,
         heightUnit: HeightUnit = .meters
     ) -> ConditionsPresentation {
-        let heightText = HebrewText.height(conditions.waveHeightMeters, unit: heightUnit)
+        // A range, not a single number: the significant height through to the
+        // sets. This is what "2-3 ft" means on every other forecast, and
+        // quoting only the significant height reads a size smaller than the
+        // app a user is cross-checking against.
+        let range = conditions.surfRange
+        let heightText = HebrewText.heightRange(
+            range.significantMeters, range.setMeters, unit: heightUnit
+        )
         let band = conditions.band
         let knots = conditions.windSpeedKnots
         let direction = CompassPoint.point(forDegrees: conditions.windDirectionDegrees)
@@ -89,7 +100,8 @@ public enum Translator {
                 direction: direction,
                 knots: knots,
                 heightUnit: heightUnit
-            )
+            ),
+            energyText: HebrewText.ltr(String(format: "%.1f", conditions.energyKilowattsPerMetre))
         )
     }
 
@@ -109,7 +121,9 @@ public enum Translator {
             parts.append("ציון \(score.value)")
         }
         parts.append(band.hebrew)
-        parts.append(HebrewText.spokenHeight(conditions.waveHeightMeters, unit: heightUnit))
+        // A screen reader gets one number, not a range: the sets, which is what
+        // a surfer would answer if asked how big it was.
+        parts.append(HebrewText.spokenHeight(conditions.surfRange.setMeters, unit: heightUnit))
         parts.append("רוח \(direction.hebrewAdjective) \(HebrewText.spokenKnots(knots))")
         if conditions.isSynthetic {
             parts.append("נגזר מקומית מהרוח")

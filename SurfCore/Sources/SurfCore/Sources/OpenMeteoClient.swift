@@ -104,8 +104,10 @@ public struct OpenMeteoClient: ForecastSource {
             URLQueryItem(name: "longitude", value: String(spot.longitude)),
             URLQueryItem(name: "hourly", value: [
                 "wave_height", "wave_period", "wave_direction",
-                "swell_wave_height", "swell_wave_period", "swell_wave_direction",
-                "wind_wave_height", "wind_wave_period", "wind_wave_direction",
+                "swell_wave_height", "swell_wave_period", "swell_wave_peak_period",
+                "swell_wave_direction",
+                "wind_wave_height", "wind_wave_period", "wind_wave_peak_period",
+                "wind_wave_direction",
                 "sea_surface_temperature", "sea_level_height_msl"
             ].joined(separator: ",")),
             URLQueryItem(name: "models", value: model),
@@ -149,9 +151,11 @@ public struct OpenMeteoClient: ForecastSource {
             let waveDirection: [Double?]?
             let swellWaveHeight: [Double?]?
             let swellWavePeriod: [Double?]?
+            let swellWavePeakPeriod: [Double?]?
             let swellWaveDirection: [Double?]?
             let windWaveHeight: [Double?]?
             let windWavePeriod: [Double?]?
+            let windWavePeakPeriod: [Double?]?
             let windWaveDirection: [Double?]?
             let seaSurfaceTemperature: [Double?]?
             let seaLevelHeightMsl: [Double?]?
@@ -163,9 +167,11 @@ public struct OpenMeteoClient: ForecastSource {
                 case waveDirection = "wave_direction"
                 case swellWaveHeight = "swell_wave_height"
                 case swellWavePeriod = "swell_wave_period"
+                case swellWavePeakPeriod = "swell_wave_peak_period"
                 case swellWaveDirection = "swell_wave_direction"
                 case windWaveHeight = "wind_wave_height"
                 case windWavePeriod = "wind_wave_period"
+                case windWavePeakPeriod = "wind_wave_peak_period"
                 case windWaveDirection = "wind_wave_direction"
                 case seaSurfaceTemperature = "sea_surface_temperature"
                 case seaLevelHeightMsl = "sea_level_height_msl"
@@ -225,11 +231,13 @@ public struct OpenMeteoClient: ForecastSource {
                 primarySwell: component(
                     hourly.swellWaveHeight?[safe: index] ?? nil,
                     hourly.swellWavePeriod?[safe: index] ?? nil,
+                    hourly.swellWavePeakPeriod?[safe: index] ?? nil,
                     hourly.swellWaveDirection?[safe: index] ?? nil
                 ),
                 windWave: component(
                     hourly.windWaveHeight?[safe: index] ?? nil,
                     hourly.windWavePeriod?[safe: index] ?? nil,
+                    hourly.windWavePeakPeriod?[safe: index] ?? nil,
                     hourly.windWaveDirection?[safe: index] ?? nil
                 ),
                 windSpeedMPS: wind.speed,
@@ -241,9 +249,21 @@ public struct OpenMeteoClient: ForecastSource {
         }
     }
 
-    private func component(_ height: Double?, _ period: Double?, _ direction: Double?) -> SwellComponent? {
+    /// - Parameter peak: Tp. Absent on some model runs, in which case the train
+    ///   falls back to the mean period rather than being dropped.
+    private func component(
+        _ height: Double?,
+        _ period: Double?,
+        _ peak: Double?,
+        _ direction: Double?
+    ) -> SwellComponent? {
         guard let height, let period, let direction else { return nil }
-        return SwellComponent(heightMeters: height, periodSeconds: period, directionDegrees: direction)
+        return SwellComponent(
+            heightMeters: height,
+            periodSeconds: period,
+            peakPeriodSeconds: peak,
+            directionDegrees: direction
+        )
     }
 }
 

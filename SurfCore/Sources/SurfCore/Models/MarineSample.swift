@@ -1,16 +1,54 @@
 import Foundation
 
 /// One wave train — swell or wind wave — as a model reports it.
+///
+/// ## Mean period is not peak period
+/// Models report both and they are different physical quantities: `Tm` is the
+/// mean of all periods present, `Tp` the period of the most energetic band.
+/// The ratio runs about 0.75–0.85, and measured against this coast it is 0.78.
+///
+/// **Every buoy and every surf forecast quotes Tp**, so it is the only one that
+/// can be compared against ground truth or against another app. Feeding Tm into
+/// thresholds written for Tp under-reads the sea by roughly a quarter — enough
+/// to score three quarters of the hours here as wind slop when almost none are.
 public struct SwellComponent: Sendable, Equatable {
     public let heightMeters: Double
+    /// Mean period, Tm. Open-Meteo's `*_wave_period`.
     public let periodSeconds: Double
+    /// Peak period, Tp. Open-Meteo's `*_wave_peak_period`.
+    ///
+    /// Optional because the combined-sea fallback below has no peak variable to
+    /// draw on; `surfPeriodSeconds` degrades to the mean when it is missing.
+    public let peakPeriodSeconds: Double?
     /// Direction the waves travel *from*, degrees true.
     public let directionDegrees: Double
 
-    public init(heightMeters: Double, periodSeconds: Double, directionDegrees: Double) {
+    public init(
+        heightMeters: Double,
+        periodSeconds: Double,
+        peakPeriodSeconds: Double? = nil,
+        directionDegrees: Double
+    ) {
         self.heightMeters = heightMeters
         self.periodSeconds = periodSeconds
+        self.peakPeriodSeconds = peakPeriodSeconds
         self.directionDegrees = directionDegrees
+    }
+
+    /// The period that reaches users and the score. Prefer Tp; fall back to Tm
+    /// only when the source did not supply one.
+    public var surfPeriodSeconds: Double {
+        peakPeriodSeconds ?? periodSeconds
+    }
+
+    /// Deep-water wave power, kW/m: `P = (rho g^2 / 64 pi) H^2 T`, which for
+    /// seawater is very close to `0.5 H^2 T`.
+    ///
+    /// This is the quantity Surfline and Magicseaweed lead with, and the reason
+    /// they do: 1 m at 12 s carries nearly two and a half times the punch of
+    /// 1 m at 5 s, and height alone cannot say so.
+    public var energyKilowattsPerMetre: Double {
+        0.5 * heightMeters * heightMeters * surfPeriodSeconds
     }
 }
 
@@ -68,6 +106,26 @@ public struct RawMarineSample: Sendable, Equatable {
         self.airTemperatureC = airTemperatureC
         self.seaSurfaceTemperatureC = seaSurfaceTemperatureC
         self.seaLevelMeters = seaLevelMeters
+    }
+
+    /// The independent wave trains present in this hour.
+    ///
+    /// A partitioned sea is two or more trains arriving on different bearings
+    /// with different periods, and each has to be shoaled and refracted on its
+    /// own geometry — a 9 s groundswell from the west and a 3 s chop from the
+    /// north-west do not share a physics. Falls back to the combined sea when
+    /// the source does not partition, which is the only case where treating the
+    /// sea as one train is correct.
+    public var partitions: [SwellComponent] {
+        let separated = [primarySwell, windWave]
+            .compactMap { $0 }
+            .filter { $0.heightMeters > 0 }
+        guard separated.isEmpty else { return separated }
+        return [SwellComponent(
+            heightMeters: waveHeightMeters,
+            periodSeconds: wavePeriodSeconds,
+            directionDegrees: waveDirectionDegrees
+        )]
     }
 
     /// The wave train that actually matters for surfing: groundswell when the

@@ -110,6 +110,16 @@ public enum HebrewText {
         return "\(ltr(String(format: "%.1f", value))) \(unit.hebrewAbbreviation)"
     }
 
+    /// A surf range, the way every forecast quotes it: `0.6-0.8 מ׳`.
+    ///
+    /// The whole numeric run is isolated as one unit so the bidirectional
+    /// algorithm cannot swap the two ends and render it backwards.
+    public static func heightRange(_ low: Double, _ high: Double, unit: HeightUnit) -> String {
+        let a = String(format: "%.1f", unit.convert(fromMeters: low))
+        let b = String(format: "%.1f", unit.convert(fromMeters: high))
+        return "\(ltr("\(a)-\(b)")) \(unit.hebrewAbbreviation)"
+    }
+
     /// The same value spelled out for VoiceOver: no abbreviation, and no
     /// invisible direction marks for a screen reader to stumble over.
     public static func spokenHeight(_ meters: Double, unit: HeightUnit) -> String {

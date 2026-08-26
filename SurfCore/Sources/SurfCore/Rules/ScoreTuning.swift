@@ -55,12 +55,47 @@ enum ScoreTuning {
     // MARK: - Surfing
 
     struct Surfing: Sendable {
-        /// Full marks between 0.6 m and 1.5 m at the beach, the golden range.
-        let height = Trapezoid(riseStart: 0.25, plateauStart: 0.6, plateauEnd: 1.5, fallEnd: 3.0)
+        /// Whether the sea is rideable at all - a **gate**, not a scale.
+        ///
+        /// This deliberately sits flat across the whole usable range and only
+        /// falls away at the edges: nothing to catch below roughly a third of a
+        /// metre, and beyond about two metres a beach break stops being a
+        /// session for most people.
+        ///
+        /// It used to be the research's 0.6-1.5 m golden range, which was wrong
+        /// *once `energy` existed*: power already goes as `H^2`, so a ramp here
+        /// across the same heights charged a small sea twice for being small and
+        /// dragged every ordinary day toward zero. Size and power are one fact,
+        /// and energy is the one that measures it.
+        let height = Trapezoid(riseStart: 0.15, plateauStart: 0.35, plateauEnd: 2.0, fallEnd: 3.5)
 
         /// Period is the true measure of wave quality. Under 5 s is wind slop
         /// that will not carry a board; 7 to 9 s is real energy.
+        ///
+        /// Reported for transparency but no longer a scoring term of its own -
+        /// `energy` below combines it with height the way the physics does.
+        ///
+        /// **Known miscalibration, deliberately not yet changed.** This plateau
+        /// is an ocean band. The measured median peak period on this coast is
+        /// 6.3 s, so a normal good local day can never reach it. Moving it is a
+        /// threshold change, and thresholds here come from data or from a local
+        /// surfer, never from a hunch - so it waits for the calibration log.
         let period = Trapezoid(riseStart: 3.5, plateauStart: 7.0, plateauEnd: 12.0, fallEnd: 20.0)
+
+        /// Wave power in kW/m, and the term that actually drives the score.
+        ///
+        /// Height and period are not independent: power goes as `H^2 T`, which
+        /// is why Surfline and Magicseaweed both lead with energy rather than
+        /// height. Scoring them as two separate trapezoids and multiplying, as
+        /// this did before, counts height once and period once where the
+        /// physics counts height twice.
+        ///
+        /// The bounds are read off the research's own golden range rather than
+        /// invented: 0.6 m at 7 s gives 1.25 kW/m and 1.5 m at 9 s gives 10.1,
+        /// so those are the plateau. Below 0.4 there is nothing to ride. The
+        /// upper fall is loose on purpose - `height` is what rules out a sea
+        /// that is simply too big, and it should not be ruled out twice.
+        let energy = Trapezoid(riseStart: 0.4, plateauStart: 1.25, plateauEnd: 10.0, fallEnd: 40.0)
 
         let wind = RelationCurves(
             // A light offshore is the best wind a surfer can get; a hard one

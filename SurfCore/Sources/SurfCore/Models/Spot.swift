@@ -8,6 +8,37 @@ public enum Basin: String, Sendable, Codable, Equatable {
     case gulfOfEilat
 }
 
+/// The arc of swell bearings a spot can actually receive.
+///
+/// Refraction already drops anything arriving from behind the shoreline, but
+/// that is a half-plane and real coastlines are not. Headlands, breakwaters and
+/// the Roman piers at Caesarea shadow specific *sectors*: a swell can be square
+/// onto the beach normal and still be blocked by the mole just up the coast.
+///
+/// Expressed as the arc running clockwise from `fromDegrees` to `toDegrees`, so
+/// it wraps through north the way a real window usually does.
+public struct SwellWindow: Sendable, Codable, Equatable {
+    public let fromDegrees: Double
+    public let toDegrees: Double
+
+    public init(fromDegrees: Double, toDegrees: Double) {
+        self.fromDegrees = fromDegrees
+        self.toDegrees = toDegrees
+    }
+
+    /// Whether swell arriving *from* this bearing reaches the break.
+    public func admits(_ bearingDegrees: Double) -> Bool {
+        let bearing = Compass.normalize(bearingDegrees)
+        let start = Compass.normalize(fromDegrees)
+        let end = Compass.normalize(toDegrees)
+        // A window that does not wrap is a simple range; one that wraps through
+        // 0 is the union of the two ends.
+        return start <= end
+            ? (bearing >= start && bearing <= end)
+            : (bearing >= start || bearing <= end)
+    }
+}
+
 /// A surfable location, with the geometry needed to turn open-sea model output
 /// into what actually breaks here.
 ///
@@ -37,6 +68,16 @@ public struct Spot: Sendable, Codable, Equatable, Identifiable {
     /// Nearest ISRAMAR station, when one is close enough to be a useful check.
     public let buoyStationID: String?
 
+    /// The sector this break is open to. `nil` means "no sector data", which
+    /// leaves refraction as the only shadowing — the behaviour before windows
+    /// existed.
+    ///
+    /// Deliberately unpopulated in `spots.json`. Every value here is a claim
+    /// about a specific headland or mole, and inventing eleven of them from a
+    /// map would be exactly the kind of plausible-looking number this project
+    /// refuses to ship. They need local knowledge or bathymetry.
+    public let swellWindow: SwellWindow?
+
     public init(
         id: String,
         nameHebrew: String,
@@ -47,7 +88,8 @@ public struct Spot: Sendable, Codable, Equatable, Identifiable {
         exposureCoefficient: Double,
         shorelineNormalDegrees: Double,
         breakDepthMeters: Double,
-        buoyStationID: String? = nil
+        buoyStationID: String? = nil,
+        swellWindow: SwellWindow? = nil
     ) {
         self.id = id
         self.nameHebrew = nameHebrew
@@ -59,6 +101,7 @@ public struct Spot: Sendable, Codable, Equatable, Identifiable {
         self.shorelineNormalDegrees = shorelineNormalDegrees
         self.breakDepthMeters = breakDepthMeters
         self.buoyStationID = buoyStationID
+        self.swellWindow = swellWindow
     }
 }
 

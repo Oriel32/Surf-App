@@ -57,8 +57,11 @@ struct HeightUnitTests {
         #expect(metric.waveHeightText.contains(HebrewText.geresh))
 
         let imperial = Translator.present(conditions, heightUnit: .feet)
+        // 1.0 m significant = 3.3 ft, and the sets at 1.27x = 4.2 ft. The
+        // rendered range spans both; the spoken label quotes the sets.
         #expect(imperial.waveHeightText.contains("3.3"))
-        #expect(imperial.accessibilityLabel.contains("3.3"))
+        #expect(imperial.waveHeightText.contains("4.2"))
+        #expect(imperial.accessibilityLabel.contains("4.2"))
         // Spoken form drops the abbreviation and the direction marks.
         #expect(!imperial.accessibilityLabel.contains(HebrewText.leftToRightMark))
     }

@@ -57,9 +57,31 @@ struct SurfingScoreTests {
     @Test("The score reports the components behind it")
     func scoreExplainsItself() {
         let score = MatchScoreEngine.score(for: .fixture(), profile: surfer)
-        #expect(score.components["height"] != nil)
-        #expect(score.components["period"] != nil)
+        #expect(score.components["energy"] != nil)
+        #expect(score.components["size"] != nil)
+        #expect(score.components["shape"] != nil)
         #expect(score.components["wind"] != nil)
+    }
+
+    @Test("Energy separates a groundswell from chop of the same height")
+    func energySeparatesSwellFromChop() {
+        // The reason every other forecast leads with energy: same height,
+        // different wave. Power goes as H^2 T, so the long-period sea carries
+        // more than twice the punch.
+        let chop = SpotConditions.fixture(waveHeightMeters: 1.0, periodSeconds: 5)
+        let swell = SpotConditions.fixture(waveHeightMeters: 1.0, periodSeconds: 12)
+        #expect(swell.energyKilowattsPerMetre > chop.energyKilowattsPerMetre * 2)
+    }
+
+    @Test("Comparable energy still scores differently when one sea closes out")
+    func shapeIsNotEnergy() {
+        // 0.9 m at 4 s carries real power and is still unsurfable. Energy alone
+        // cannot say so, which is why period also enters as shape.
+        let slop = SpotConditions.fixture(waveHeightMeters: 0.9, periodSeconds: 4)
+        let swell = SpotConditions.fixture(waveHeightMeters: 0.9, periodSeconds: 9)
+        #expect(slop.energyKilowattsPerMetre > 1.2)  // genuinely energetic
+        #expect(MatchScoreEngine.score(for: swell, profile: surfer).value
+                > MatchScoreEngine.score(for: slop, profile: surfer).value + 20)
     }
 }
 

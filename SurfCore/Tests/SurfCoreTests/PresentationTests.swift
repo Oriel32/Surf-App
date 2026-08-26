@@ -53,10 +53,21 @@ struct PresentationTests {
 
     @Test("VoiceOver gets one coherent sentence, not six fragments")
     func accessibilityLabelReadsAsMeaning() {
+        // 1.0, not 0.8: the spoken label quotes the SETS. 0.8 m significant in
+        // a Rayleigh sea puts the 1-in-10 wave at 1.02 m, and the sets are what
+        // a surfer answers when asked how big it was.
         #expect(
             presentation.accessibilityLabel
-                == "ציון 82, מותן עד חזה, 0.8 מטר, רוח מזרחית 8 קשר"
+                == "ציון 82, מותן עד חזה, 1.0 מטר, רוח מזרחית 8 קשר"
         )
+    }
+
+    @Test("Height is shown as a range, because surfers name sets")
+    func heightIsARange() {
+        // Every other forecast quotes "2-3 ft" for the same reason.
+        #expect(presentation.waveHeightText.contains("0.8"))
+        #expect(presentation.waveHeightText.contains("1.0"))
+        #expect(presentation.waveHeightText.contains("-"))
     }
 
     @Test("The spoken label drops the abbreviations and the invisible marks")

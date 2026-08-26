@@ -41,6 +41,7 @@ struct DetailView: View {
                     heightChart
                     if let hour = representative {
                         periodCard(hour)
+                        energyCard(hour)
                         temperatureCard(hour)
                     }
                     confidenceCard
@@ -152,6 +153,28 @@ struct DetailView: View {
         if seconds < 5 { return "מתחת ל-5 שניות — רחש רוח, לא אנרגיה אמיתית." }
         if seconds < 7 { return "מחזור בינוני. הגלים ידחפו, אבל לא בעוצמה." }
         return "מחזור ארוך — אנרגיה אמיתית, גלים מלאים ומהירים."
+    }
+
+    /// Wave power — the number Surfline and Magicseaweed lead with, and the one
+    /// a sceptical user will cross-check us against. It is also the term that
+    /// now drives the Match Score, so showing it is what makes the score
+    /// arguable instead of asserted.
+    private func energyCard(_ hour: HourlyForecast) -> some View {
+        AnalyticalCard(title: "אנרגיית גלים", theme: theme) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(HebrewText.ltr(String(format: "%.1f", hour.conditions.energyKilowattsPerMetre)))
+                    .font(SurfFont.score)
+                    .foregroundStyle(Aqua.aqua600)
+                Text("kW/m")
+                    .font(SurfFont.cardTitle)
+                    .foregroundStyle(theme.text2)
+                Spacer(minLength: 0)
+            }
+            Text("עוצמה נמדדת בגובה בריבוע כפול המחזור, ולכן גל של מטר בעשר שניות חזק בהרבה מגל של מטר בחמש. זה המספר שמניע את הציון.")
+                .font(SurfFont.meta)
+                .foregroundStyle(theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private func temperatureCard(_ hour: HourlyForecast) -> some View {

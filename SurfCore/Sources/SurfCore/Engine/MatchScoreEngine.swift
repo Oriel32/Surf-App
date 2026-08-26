@@ -45,17 +45,39 @@ public enum MatchScoreEngine {
 
     private static func surfing(_ c: SpotConditions) -> (Double, [String: Double]) {
         let tuning = ScoreTuning.surfing
-        let height = tuning.height.value(c.waveHeightMeters)
-        let period = tuning.period.value(c.periodSeconds)
+
+        // Energy says how hard the wave will push. It is height and period
+        // combined the way the physics combines them, H^2 T - which is what
+        // every forecast a user might cross-check against leads with.
+        let energy = tuning.energy.value(c.energyKilowattsPerMetre)
+
+        // Size is a different question from power: whether the thing is
+        // rideable at all. It gates rather than adds, so a 0.2 m sea cannot
+        // score on a long period and a 4 m sea cannot score on raw power.
+        let size = tuning.height.value(c.waveHeightMeters)
+
+        // Period enters twice, and not by accident. Inside `energy` it is
+        // POWER: how much water the wave is moving. Here it is SHAPE: whether
+        // that power arrives as a wave that stands up and peels, or as a short
+        // steep thing that closes out. 0.9 m at 4 s and 0.9 m at 9 s carry
+        // comparable energy and are not comparable sessions.
+        let shape = tuning.period.value(c.periodSeconds)
+
         let wind = tuning.wind[c.windRelation].value(c.windSpeedKnots)
 
-        // Period modulates size rather than standing in for it. Adding the two
-        // would let a dead flat sea with a long period score 40/100, because
-        // nothing about a 12-second period helps when there is no wave.
-        let waveQuality = height * (tuning.periodFloor + (1 - tuning.periodFloor) * period)
-
+        // Multiplied, not summed: a session needs power AND a rideable size AND
+        // a wave that breaks properly. The floors keep a genuinely big
+        // long-period day from reading as a flat zero just because it is blown
+        // out - the swell still arrived, and that is worth knowing.
+        let waveQuality = energy * size * (tuning.periodFloor + (1 - tuning.periodFloor) * shape)
         let value = waveQuality * (tuning.windFloor + (1 - tuning.windFloor) * wind)
-        return (value, ["height": height, "period": period, "wind": wind])
+
+        return (value, [
+            "energy": energy,
+            "size": size,
+            "shape": shape,
+            "wind": wind
+        ])
     }
 
     // MARK: - Kite and wing foil
