@@ -177,7 +177,7 @@ The backend lives in `SurfCore/`, a SwiftPM package the app target depends on. K
 
 ## Building the backend on Windows (no Mac required)
 
-`SurfCore` has no Apple-framework dependencies, so it builds and tests on Linux. Verified working: **Swift 6.3.3 on WSL Ubuntu 24.04**, all 83 tests passing.
+`SurfCore` has no Apple-framework dependencies, so it builds and tests on Linux. Verified working: **Swift 6.3.3 on WSL Ubuntu 24.04**, all 105 tests passing.
 
 The toolchain is installed **entirely in userspace — no sudo, no system packages**:
 
@@ -199,6 +199,16 @@ export LD_LIBRARY_PATH="$HOME/localdeps/usr/lib/x86_64-linux-gnu:$HOME/localdeps
 # 4. Build with the scratch path on ext4, NOT on the /mnt/c 9p mount
 swift test --package-path /mnt/c/.../SurfCore --scratch-path ~/build/surfcore
 ```
+
+**WSL2's network stack drops roughly a quarter of outbound HTTPS requests here.** They hang
+until the timeout rather than failing fast, on IPv4 and IPv6 alike, against every host tried.
+The same requests from Windows are clean 10/10, so it is the WSL NAT layer, not the provider
+and not the client. Two consequences:
+
+- **A failing smoke run means nothing until it fails twice.** Sampling one run per spot produced
+  a convincing, entirely false "this spot is broken" diagnosis. Re-run before believing it.
+- It is why `RetryingTransport` exists and is on by default. Retries are correct for a phone on
+  cellular regardless, but this environment is what surfaced the need.
 
 The `--scratch-path` matters: leaving build artifacts on `/mnt/c` is the difference between an 8-second build and an unusable one. Undo everything with `rm -rf ~/swift ~/localdeps ~/build`.
 

@@ -17,7 +17,11 @@ public struct URLSessionTransport: HTTPTransport {
     private let session: URLSession
     private let timeout: TimeInterval
 
-    public init(session: URLSession = .shared, timeout: TimeInterval = 15) {
+    /// - Parameter timeout: this is the timeout for a *single attempt*. Keep it
+    ///   short: `RetryingTransport` is what turns one short attempt into
+    ///   resilience, and a long timeout just makes a dead connection block the
+    ///   screen for longer before anyone tries again.
+    public init(session: URLSession = .shared, timeout: TimeInterval = 8) {
         self.session = session
         self.timeout = timeout
     }

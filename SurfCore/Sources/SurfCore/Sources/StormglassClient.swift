@@ -24,11 +24,15 @@ public struct StormglassClient: ForecastSource, ModelEnsembleSource {
     ///   commit it, and never bake it into the app binary for a free-tier key.
     public init(
         apiKey: String,
-        transport: any HTTPTransport = URLSessionTransport(),
+        transport: (any HTTPTransport)? = nil,
         models: [String] = ["noaa", "icon", "meteo", "ecmwf"]
     ) {
         self.apiKey = apiKey
-        self.transport = transport
+        // `.frugal`, not `.standard`: on a ten-requests-a-day budget an eager
+        // retry policy does not improve reliability, it removes the source.
+        self.transport = transport ?? RetryingTransport(
+            wrapping: URLSessionTransport(), policy: .frugal
+        )
         self.models = models
     }
 

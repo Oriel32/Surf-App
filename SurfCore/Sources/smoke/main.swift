@@ -46,6 +46,27 @@ func rule(_ title: String) {
     print(String(repeating: "─", count: max(title.count, 40)))
 }
 
+enum FailureKind {
+    case network
+    case rejected(Int)
+    case schema
+}
+
+func diagnose(_ error: any Error) -> FailureKind {
+    if let source = error as? SourceError {
+        switch source {
+        case .transport: return .network
+        case .badStatus(let code): return .rejected(code)
+        case .malformedPayload, .unknownStation, .staleObservation: return .schema
+        }
+    }
+    if error is URLError { return .network }
+    // Off-Apple, URLSession failures surface as NSError in this domain rather
+    // than bridging to URLError.
+    if (error as NSError).domain == NSURLErrorDomain { return .network }
+    return .schema
+}
+
 func describeAge(_ interval: TimeInterval) -> String {
     let minutes = Int(interval / 60)
     if minutes < 90 { return "\(minutes) minutes ago" }
@@ -91,8 +112,21 @@ do {
     print("  OK — \(forecast.hours.count) hourly samples decoded")
 } catch {
     print("  FAIL: \(error)")
-    print("\nThis is the failure the unit tests could not catch: the live payload")
-    print("did not match the decoder. Check the URL and the Codable keys.")
+    // Naming the wrong cause sends the reader to the wrong file. A dropped
+    // connection and a schema change look nothing alike and are fixed in
+    // completely different places, so say which one this was.
+    switch diagnose(error) {
+    case .network:
+        print("\nThe request never completed — this is a transport failure, not a")
+        print("schema change. The retry policy already tried and gave up, so check")
+        print("the connection before touching any decoder.")
+    case .rejected(let code):
+        print("\nThe server answered \(code). The request reached it and was refused,")
+        print("so check the URL, the parameters and the key — not the connection.")
+    case .schema:
+        print("\nThis is the failure the unit tests could not catch: the live payload")
+        print("did not match the decoder. Check the URL and the Codable keys.")
+    }
     exit(1)
 }
 

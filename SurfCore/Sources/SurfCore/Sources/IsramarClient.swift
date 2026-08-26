@@ -30,8 +30,11 @@ public struct IsramarClient: ObservationSource {
 
     private let transport: any HTTPTransport
 
-    public init(transport: any HTTPTransport = URLSessionTransport()) {
-        self.transport = transport
+    public init(transport: (any HTTPTransport)? = nil) {
+        // A retry here is cheap and this endpoint is unmanaged scraped JSON, but
+        // the forecast never waits on it: `ForecastRepository` treats a failure
+        // as `.unavailable` either way.
+        self.transport = transport ?? RetryingTransport(wrapping: URLSessionTransport())
     }
 
     public func latestObservation(stationID: String) async throws -> BuoyObservation {
