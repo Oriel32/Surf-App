@@ -12,19 +12,29 @@ translated into the language surfers actually use — `0.8 מ׳ · מותן עד
 ```
 SurfCore/          SwiftPM package — the entire engine. No UIKit, no SwiftUI, builds on Linux.
   Sources/SurfCore/
-    Sources/       Three API clients behind one ForecastSource protocol.
-    Models/        Spot catalog, raw samples, transformed conditions, slang bands.
+    Sources/       Three API clients behind one ForecastSource protocol, plus the
+                   retry and cache transport decorators.
+    Models/        Spot catalog, raw samples, transformed conditions, DataState.
+    Rules/         Table-driven bands: slang, sea state, wind, score, wetsuit.
     Engine/        Wave transformation, match score, safety, best-window search.
+    Translation/   Conditions -> Hebrew words, colour tokens, VoiceOver labels.
     Repository/    Actor that fetches, assembles, caches.
   Sources/smoke/   Live end-to-end run against the real endpoints.
-  Tests/           Hermetic, fixture-driven.
+  Tests/           Hermetic, fixture-driven. 155 tests.
+App/               The SwiftUI app. Three tabs; every string comes from Translation.
+project.yml        XcodeGen spec. Glassy.xcodeproj is GENERATED, never committed.
+.github/workflows/ macOS runner: tests, generates the project, builds an unsigned .ipa.
+docs/INSTALL.md    Getting the build onto an iPhone, free, without a Mac.
 design/            Screen studies.
-claude.md          The build spec: domain rules, data sources, phases, UI architecture.
+scripts/           WSL Swift toolchain wrapper; app-icon generator.
+claude.md          The build spec: domain rules, phases, UI architecture.
 surf_research.md   The domain research the rules are extracted from.
+.claude/skills/    Lazily-loaded reference: screen layouts, data sources, toolchain setup.
 ```
 
 The engine is a package rather than an app target on purpose: it means the whole forecast
 pipeline can be built and tested without an iOS simulator, and in practice without a Mac.
+That is what keeps the Mac a small, late problem instead of a blocking one.
 
 ## Build and test
 
@@ -35,8 +45,8 @@ swift build --package-path SurfCore
 swift test  --package-path SurfCore
 ```
 
-On Windows, via WSL — the toolchain installs entirely in userspace, no sudo. See
-"Building the backend on Windows" in `claude.md` for the one-time setup, then:
+On Windows, via WSL — the toolchain installs entirely in userspace, no sudo. Run the
+`wsl-swift-setup` skill for the one-time setup, then:
 
 ```bash
 ./scripts/wsl-swift.sh test              # hermetic unit suite
@@ -53,6 +63,35 @@ On Windows, via WSL — the toolchain installs entirely in userspace, no sudo. S
 The unit suite was green while three real bugs were live; all three were found only by the
 smoke test. Run it before believing any ingest change.
 
+## The app
+
+Five screens behind three tabs — Home and Week are the product, the rest is support.
+
+| Screen | The question it answers | Layer |
+|---|---|---|
+| Home | "Do I get in the car, right now?" | 1 |
+| Week | "Which day this week?" | 1 per row |
+| Detail | "Is this model right?" | 2 |
+| Spots | "Where should I go?" | 1 per row |
+| Settings | Sport, skill, units, favourites | — |
+
+Hebrew is the primary locale and the layout is right-to-left from the first view. Wind arrows
+and compass glyphs are pinned against mirroring — they encode real-world geography, and a
+flipped arrow would report offshore as onshore.
+
+## Getting it on a phone
+
+There is no Mac in this project and none is needed. `.github/workflows/ios.yml` runs on a
+GitHub `macos-latest` runner — free with unlimited minutes on a public repository — and
+produces an unsigned `.ipa` as a build artifact. It carries no signing secrets: the app is
+signed on-device with a free Apple ID.
+
+```bash
+gh run download --name Glassy-unsigned-ipa --dir dist
+```
+
+Then follow `docs/INSTALL.md`. Requires iOS 17.0 or later.
+
 ## Status
 
 | Phase | | |
@@ -65,7 +104,19 @@ smoke test. Run it before believing any ingest change.
 | 5 | Match Score | done |
 | 6 | Safety — offshore drift alert | done |
 | 7 | Verification — buoys done, webcams open | partial |
-| 8 | SwiftUI app | not started — needs a Mac |
+| 8 | SwiftUI app — all five screens, building in CI | done |
 
-The Stormglass key is never committed. The free tier allows ~10 requests/day, so that source
-is fetched by a scheduled job for a fixed spot list, never per-view from a device.
+Open, and deliberately so:
+
+- **Webcams have no data source.** The Detail screen says none is configured rather than
+  faking one.
+- **Model confidence is absent.** It needs Stormglass, whose free tier of ~10 requests/day
+  cannot be called from a device — it needs a scheduled job for a fixed spot list. The
+  screen reports it unavailable rather than fabricating a percentage from one model.
+- **Two thresholds are working defaults, not research.** The `overhead` slang band at
+  1.5–2.2 m and the score band boundaries at 60/80. Confirm with a local surfer before
+  shipping.
+- **Distance sorting on Spots** needs CoreLocation and a permission prompt; it sorts by
+  score and name for now.
+
+The Stormglass key is never committed.
