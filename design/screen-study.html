@@ -1,487 +1,475 @@
-<title>Glassy — Screen Study</title>
+<title>Glassy Screen Study</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@400;500;700&family=Rubik:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 
 <style>
+/* ============================================================
+   TOKENS
+   Palette is app_ui.md verbatim. The only additions are the
+   state colours: Glassy has no photography to carry saturation,
+   it has data, so saturation lives in the aqua and in sea state.
+   ============================================================ */
 :root {
-  /* Mediterranean at dusk: salt haze ground, sea-ink type, one glassy cyan. */
-  --ground:      #E4EBEB;
-  --ground-deep: #D3DEDE;
-  --surface:     #FFFFFF;
-  --surface-2:   #F4F8F8;
-  --ink:         #0A1A21;
-  --ink-2:       #3D5560;
-  --ink-3:       #6E8590;
-  --hairline:    #C3D2D3;
+  --aqua-400:#5BDDE1;
+  --aqua-500:#34CFD5;
+  --aqua-600:#1FB2B8;
+  --mist:#EAF9FB;
+  --blush:#F7EDF6;
+  --paper:#FFFFFF;
+  --ink:#0E1113;
+  --text-1:#101418;
+  --text-2:#7A8891;
+  --sand:#E8D9BC;
+  --hairline:#F2F6F8;
 
-  /* Accent — the glassy state, used sparingly so it lands when it appears. */
-  --glass:       #0E8FAF;
-  --glass-soft:  #D6EDF3;
+  /* State. Never used structurally. */
+  --state-choppy:#E8663C;
+  --state-flat:#9AA7AE;
+  --state-glassy:var(--aqua-500);
+  --alert:#FF6B4A;
 
-  /* Semantic, deliberately outside the accent hue. */
-  --chop:        #B96C1E;
-  --chop-soft:   #F6E5D0;
-  --alert:       #C13C2C;
-  --alert-soft:  #F7DDD8;
-  --alert-ink:   #FFFFFF;
-  --sand:        #9C8A69;
+  /* Page ground — the study wrapper, not the app. */
+  --page:#F4FBFC;
+  --page-2:#FFFFFF;
+  --rule:#E3EEF1;
+  --code-bg:#EAF9FB;
 
-  --phone-shell: #12222A;
-  --phone-ring:  #2C444F;
+  --shadow-card:0 12px 32px rgba(16,44,52,0.08);
+  --shadow-btn:0 2px 8px rgba(16,44,52,0.05);
+  --shadow-phone:0 24px 70px rgba(16,44,52,0.16);
 
-  --r-sm: 6px;
-  --r-md: 12px;
-  --r-lg: 20px;
+  --orb:linear-gradient(135deg,#F7B7D3 0%,#B9A6F0 52%,#6FE0E8 100%);
+
+  --sans:'Rubik',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+
+  /* The home-screen bloom from app_ui.md: mist overall, blush lilac top-left
+     only. It is a light-ground effect, so the dark theme sets it to none. */
+  --bloom:
+    radial-gradient(1100px 620px at 8% -6%, var(--blush) 0%, transparent 62%),
+    radial-gradient(1200px 700px at 94% 2%, var(--mist) 0%, transparent 58%);
 }
 
+/* The study chrome adapts to the reader's theme. The phone screens
+   below deliberately do not: they are a light iOS app, and showing
+   them on a dark ground would misrepresent the design. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --ground:      #071319;
-    --ground-deep: #040D11;
-    --surface:     #0E2029;
-    --surface-2:   #142A34;
-    --ink:         #E6F0F1;
-    --ink-2:       #9DB4BD;
-    --ink-3:       #6B848F;
-    --hairline:    #1E3A45;
-
-    --glass:       #3FBEDD;
-    --glass-soft:  #0D3A47;
-
-    --chop:        #E09A4E;
-    --chop-soft:   #3A2913;
-    --alert:       #E86A57;
-    --alert-soft:  #3E1913;
-    --alert-ink:   #1A0906;
-    --sand:        #BCA983;
-
-    --phone-shell: #000000;
-    --phone-ring:  #243B45;
+    --page:#0B1416;
+    --page-2:#101B1E;
+    --rule:#1E3034;
+    --text-1:#E8F4F6;
+    --text-2:#94A9AF;
+    --code-bg:#16292D;
+    --bloom:none;
   }
 }
-
 :root[data-theme="dark"] {
-  --ground:      #071319;
-  --ground-deep: #040D11;
-  --surface:     #0E2029;
-  --surface-2:   #142A34;
-  --ink:         #E6F0F1;
-  --ink-2:       #9DB4BD;
-  --ink-3:       #6B848F;
-  --hairline:    #1E3A45;
-
-  --glass:       #3FBEDD;
-  --glass-soft:  #0D3A47;
-
-  --chop:        #E09A4E;
-  --chop-soft:   #3A2913;
-  --alert:       #E86A57;
-  --alert-soft:  #3E1913;
-  --alert-ink:   #1A0906;
-  --sand:        #BCA983;
-
-  --phone-shell: #000000;
-  --phone-ring:  #243B45;
+  --page:#0B1416;
+  --page-2:#101B1E;
+  --rule:#1E3034;
+  --text-1:#E8F4F6;
+  --text-2:#94A9AF;
+  --code-bg:#16292D;
+  --bloom:none;
 }
 
-* { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  background: var(--ground);
-  color: var(--ink);
-  font-family: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-weight: 400;
-  line-height: 1.55;
-  -webkit-font-smoothing: antialiased;
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--page);
+  color:var(--text-1);
+  font-family:var(--sans);
+  font-weight:400;
+  line-height:1.55;
+  background-image:var(--bloom);
+  background-attachment:fixed;
 }
 
-.wrap {
-  max-width: 1500px;
-  margin: 0 auto;
-  padding: clamp(28px, 5vw, 64px) clamp(18px, 4vw, 48px) 80px;
+.wrap{max-width:1180px;margin:0 auto;padding:64px 28px 120px}
+
+/* ---------- masthead ---------- */
+.eyebrow{
+  font-size:11px;font-weight:500;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--text-2);margin-bottom:18px;
 }
-
-/* ---------- page header ---------- */
-
-.masthead { display: flex; flex-direction: column; gap: 14px; margin-bottom: 10px; }
-
-.eyebrow {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--glass);
+h1.wordmark{
+  font-size:clamp(38px,7vw,58px);line-height:1;letter-spacing:-.03em;
+  margin:0 0 20px;font-weight:300;text-wrap:balance;
 }
-
-h1 {
-  font-family: "Frank Ruhl Libre", Georgia, serif;
-  font-weight: 700;
-  font-size: clamp(32px, 5.2vw, 54px);
-  line-height: 1.05;
-  letter-spacing: -0.015em;
-  margin: 0;
-  text-wrap: balance;
+h1.wordmark b{font-weight:700}
+.standfirst{
+  max-width:62ch;font-size:16px;line-height:1.62;color:var(--text-2);
+  margin:0 0 26px;
 }
-
-.standfirst {
-  max-width: 62ch;
-  font-size: clamp(15px, 1.5vw, 17px);
-  color: var(--ink-2);
-  margin: 0;
+.standfirst strong{color:var(--text-1);font-weight:500}
+.provenance{display:flex;flex-wrap:wrap;gap:8px}
+.chip{
+  font-family:var(--mono);font-size:11px;letter-spacing:.01em;
+  background:var(--page-2);border:1px solid var(--rule);
+  padding:6px 11px;border-radius:14px;color:var(--text-2);
 }
+.chip b{color:var(--text-1);font-weight:500}
 
-.provenance {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
-  padding-top: 18px;
-  border-top: 1px solid var(--hairline);
+.rule{height:1px;background:var(--rule);border:0;margin:56px 0}
+
+/* ---------- gallery ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:56px 40px}
+.slot{display:flex;flex-direction:column;gap:20px;min-width:0}
+.slot-label{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.slot-num{
+  font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.1em;
+  color:var(--aqua-600);text-transform:uppercase;
 }
+.slot-name{font-size:15px;font-weight:500;color:var(--text-1)}
+.slot-why{font-size:13.5px;line-height:1.65;color:var(--text-2);margin:0;max-width:44ch}
+.slot-why b{color:var(--text-1);font-weight:500}
 
-.chip {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 11.5px;
-  padding: 5px 10px;
-  border: 1px solid var(--hairline);
-  border-radius: 999px;
-  color: var(--ink-2);
-  background: var(--surface);
-  font-variant-numeric: tabular-nums;
+/* ============================================================
+   DEVICE
+   48px frame radius, per app_ui.md.
+   ============================================================ */
+.phone{
+  width:100%;max-width:352px;margin:0 auto;
+  background:var(--paper);border-radius:48px;padding:10px;
+  box-shadow:var(--shadow-phone);
 }
-.chip b { color: var(--ink); font-weight: 500; }
-
-/* ---------- device grid ---------- */
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
-  gap: clamp(28px, 3.5vw, 46px);
-  margin-top: clamp(34px, 4vw, 54px);
-  align-items: start;
+.screen{
+  border-radius:39px;overflow:hidden;direction:rtl;
+  /* The app is a light iOS surface whatever theme the study is read in, so it
+     re-declares every token that flips. Without this the dark study palette
+     leaks in and puts pale text on white cards. */
+  --text-1:#101418;
+  --text-2:#7A8891;
+  --paper:#FFFFFF;
+  --mist:#EAF9FB;
+  --hairline:#F2F6F8;
+  background:var(--paper);
+  color:var(--text-1);
 }
-
-.slot { display: flex; flex-direction: column; gap: 16px; }
-
-.slot-label { display: flex; flex-direction: column; gap: 3px; }
-.slot-num {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 11px;
-  color: var(--glass);
-  letter-spacing: 0.1em;
+.statusbar{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:12px 22px 6px;font-size:12px;font-weight:500;color:#101418;
+  direction:ltr;
 }
-.slot-name {
-  font-family: "Frank Ruhl Libre", Georgia, serif;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-.slot-why { font-size: 13.5px; color: var(--ink-2); line-height: 1.5; }
-.slot-why b { color: var(--ink); font-weight: 500; }
-
-/* ---------- phone ---------- */
-
-.phone {
-  background: var(--phone-shell);
-  border: 1px solid var(--phone-ring);
-  border-radius: 38px;
-  padding: 9px;
-  box-shadow: 0 18px 40px -20px rgba(4, 20, 26, 0.55);
-  width: 100%;
-  max-width: 340px;
-}
-
-.screen {
-  background: var(--surface);
-  border-radius: 30px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  min-height: 660px;
-}
-
-.statusbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 11px 20px 5px;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-.statusbar .dots { display: flex; gap: 3px; align-items: center; color: var(--ink-2); font-size: 11px; letter-spacing: 0.05em; }
-
-/* app body is RTL — Hebrew is the primary locale, not a translation layer */
-.app { direction: rtl; text-align: right; padding: 0 18px 20px; display: flex; flex-direction: column; gap: 14px; flex: 1; }
-
-/* ---------- safety banner ---------- */
-
-.alert-banner {
-  background: var(--alert);
-  color: var(--alert-ink);
-  border-radius: var(--r-md);
-  padding: 13px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 4px -4px 0;
-}
-.alert-head { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; line-height: 1.25; }
-.alert-body { font-size: 12.2px; line-height: 1.5; opacity: 0.94; }
-.alert-icon { flex: none; width: 20px; height: 20px; }
+.statusbar .sig{font-family:var(--mono);font-size:10px;letter-spacing:.06em;opacity:.75}
+.app{padding:6px 16px 0;background:var(--paper);color:#101418}
 
 /* ---------- spot header ---------- */
-
-.spot-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-top: 4px; }
-.spot-name { font-size: 25px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.15; }
-.spot-sub { font-size: 12px; color: var(--ink-3); }
-.switcher { color: var(--ink-3); font-size: 18px; }
-
-.sportbar { display: flex; gap: 5px; }
-.sport {
-  font-size: 12px;
-  padding: 4px 11px;
-  border-radius: 999px;
-  border: 1px solid var(--hairline);
-  color: var(--ink-3);
-}
-.sport.on { background: var(--ink); color: var(--surface); border-color: var(--ink); font-weight: 500; }
-
-/* ---------- hero ---------- */
-
-.hero {
-  background: var(--surface-2);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-lg);
-  padding: 16px 16px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.spot-head{display:flex;align-items:center;justify-content:space-between;padding:10px 4px 14px;gap:10px}
+.spot-name{font-size:26px;font-weight:600;letter-spacing:-.02em;line-height:1.2}
+.spot-greet{font-size:15px;font-weight:400;color:var(--text-2);line-height:1.3}
+.utility{
+  width:38px;height:38px;border-radius:50%;background:var(--paper);
+  box-shadow:var(--shadow-btn);border:1px solid var(--hairline);
+  display:grid;place-items:center;flex:none;color:var(--text-2);
 }
 
-.score-row { display: flex; align-items: center; gap: 14px; }
-
-.score-num {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-weight: 500;
-  font-size: 62px;
-  line-height: 0.85;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
+/* ---------- sport segmented ---------- */
+.sportbar{
+  display:flex;gap:2px;background:var(--mist);border-radius:16px;padding:3px;margin-bottom:14px;
 }
-.score-meta { display: flex; flex-direction: column; gap: 2px; padding-bottom: 3px; }
-.score-of { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; color: var(--ink-3); }
-.score-for { font-size: 13px; color: var(--ink-2); }
-
-.s-hi  { color: var(--glass); }
-.s-mid { color: var(--chop); }
-.s-lo  { color: var(--ink-3); }
-
-.readout { display: flex; flex-direction: column; gap: 9px; }
-
-.height-line { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
-.height-num {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 21px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
+.sport{
+  flex:1;text-align:center;font-size:12.5px;font-weight:500;color:var(--text-2);
+  padding:7px 0;border-radius:13px;
 }
-.height-slang { font-size: 16px; font-weight: 500; }
+.sport.on{background:var(--paper);color:var(--text-1);box-shadow:var(--shadow-btn)}
 
-.pill-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 12.5px;
-  font-weight: 500;
-  padding: 3px 10px;
-  border-radius: 999px;
+/* ============================================================
+   SAFETY BANNER
+   Ink ground. In a white-and-aqua world the heaviest available
+   surface is the one that outranks everything — and it does so
+   without a red block fighting the palette. Glyph + word + colour,
+   so it survives greyscale.
+   ============================================================ */
+.safety{
+  background:var(--ink);color:#fff;border-radius:24px;padding:16px 18px;margin-bottom:14px;
+  position:relative;overflow:hidden;
 }
-.pill-glass { background: var(--glass-soft); color: var(--glass); }
-.pill-chop  { background: var(--chop-soft);  color: var(--chop); }
-.pill-flat  { background: var(--surface); color: var(--ink-3); border: 1px solid var(--hairline); }
-
-.wind-line { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--ink-2); }
-.wind-val { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; }
-
-/* Compass glyphs encode real-world geography and must never mirror under RTL. */
-.arrow { flex: none; width: 22px; height: 22px; direction: ltr; }
-
-.synthetic {
-  display: flex; gap: 6px; align-items: flex-start;
-  font-size: 11.5px; color: var(--sand);
-  border-top: 1px dashed var(--hairline); padding-top: 9px;
+.safety::before{
+  content:"";position:absolute;inset-inline-start:0;top:0;bottom:0;width:4px;background:var(--alert);
+}
+.safety-head{display:flex;align-items:center;gap:9px;margin-bottom:7px}
+.safety-glyph{width:20px;height:20px;flex:none;color:var(--alert)}
+.safety-title{font-size:15px;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
+.safety-body{font-size:12.5px;line-height:1.6;color:rgba(255,255,255,.82);margin:0}
+.safety-who{
+  display:inline-block;margin-top:9px;font-size:11.5px;font-weight:500;
+  background:rgba(255,107,74,.16);color:#FFB9A5;padding:4px 10px;border-radius:12px;
 }
 
-/* ---------- window callout ---------- */
-
-.window {
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+/* ============================================================
+   HERO
+   The one risk, spent on the aqua — and earned, not applied.
+   .hero.glassy floods; every other sea state stays paper.
+   ============================================================ */
+.hero{
+  border-radius:28px;padding:20px;margin-bottom:12px;
+  background:var(--paper);box-shadow:var(--shadow-card);border:1px solid var(--hairline);
+  position:relative;overflow:hidden;
 }
-.window.none { background: transparent; }
-.window.some { background: var(--glass-soft); border-color: transparent; }
-.window-k { font-size: 11.5px; letter-spacing: 0.03em; color: var(--ink-3); }
-.window.some .window-k { color: var(--glass); }
-.window-v { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.window.some .window-v { color: var(--glass); font-family: "IBM Plex Mono", ui-monospace, monospace; }
-.window-note { font-size: 12px; color: var(--ink-3); }
-
-/* ---------- hourly strip ---------- */
-
-.hourly { display: flex; flex-direction: column; gap: 7px; }
-.sec-title { font-size: 11.5px; letter-spacing: 0.05em; color: var(--ink-3); }
-
-.bars { display: flex; gap: 4px; align-items: flex-end; height: 62px; direction: ltr; }
-.bar { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; height: 100%; }
-.bar i { display: block; background: var(--hairline); border-radius: 2px 2px 0 0; }
-.bar.now i { background: var(--ink-3); }
-.bar.good i { background: var(--glass); }
-.bar span { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 8.5px; color: var(--ink-3); text-align: center; }
-
-/* ---------- buoy strip ---------- */
-
-.buoy {
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.buoy-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.buoy-name { font-size: 13px; font-weight: 500; }
-.tag {
-  font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em;
-  padding: 2px 8px; border-radius: 999px;
-}
-.tag-fresh { background: var(--glass-soft); color: var(--glass); }
-.tag-dead  { background: var(--alert-soft); color: var(--alert); }
-
-.buoy-read { display: flex; align-items: baseline; gap: 8px; }
-.buoy-num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 19px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.buoy-age { font-size: 11.5px; color: var(--ink-3); }
-.buoy-cmp {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 11.5px; color: var(--ink-2);
-  border-top: 1px solid var(--hairline); padding-top: 7px;
-  font-variant-numeric: tabular-nums;
-}
-.buoy-dead { font-size: 12px; color: var(--ink-2); line-height: 1.45; }
-.strike { text-decoration: line-through; color: var(--ink-3); }
-
-/* ---------- week rows ---------- */
-
-.week { display: flex; flex-direction: column; gap: 0; }
-.wrow {
-  display: grid;
-  grid-template-columns: 30px 40px 1fr auto;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 2px;
-  border-bottom: 1px solid var(--hairline);
-}
-.wrow:last-child { border-bottom: none; }
-.wday { font-size: 13px; font-weight: 600; }
-.wdate { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 10.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-
-.wscore { display: flex; align-items: center; gap: 7px; }
-.wscore-n {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 15px; font-weight: 500; width: 24px; text-align: left;
-  font-variant-numeric: tabular-nums; direction: ltr;
-}
-.wbar { flex: 1; height: 5px; border-radius: 3px; background: var(--hairline); overflow: hidden; direction: ltr; }
-.wbar i { display: block; height: 100%; border-radius: 3px; }
-
-.wdetail { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.wmain { font-size: 12.5px; display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
-.wmain b { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 500; font-variant-numeric: tabular-nums; }
-.wwin { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; color: var(--glass); font-variant-numeric: tabular-nums; direction: ltr; text-align: right; }
-.wwin.empty { color: var(--ink-3); }
-
-/* ---------- legend ---------- */
-
-.legend {
-  margin-top: clamp(40px, 5vw, 68px);
-  padding-top: 26px;
-  border-top: 1px solid var(--hairline);
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 26px;
-}
-.leg h3 {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--ink-3); margin: 0 0 10px; font-weight: 500;
-}
-.leg ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; }
-.leg li { display: flex; gap: 9px; align-items: baseline; font-size: 13px; color: var(--ink-2); }
-.sw { flex: none; width: 11px; height: 11px; border-radius: 3px; transform: translateY(1px); }
-.leg b { color: var(--ink); font-weight: 500; }
-
-.footnote {
-  margin-top: 34px; padding-top: 20px; border-top: 1px solid var(--hairline);
-  font-size: 12.5px; color: var(--ink-3); max-width: 76ch;
-}
-.footnote code {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 11.5px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; color: var(--ink-2);
+.hero.glassy{
+  background:linear-gradient(160deg,var(--aqua-400) 0%,var(--aqua-500) 46%,var(--aqua-600) 100%);
+  border-color:transparent;color:var(--ink);
+  box-shadow:0 16px 40px rgba(31,178,184,0.28);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  * { animation: none !important; transition: none !important; }
+.score-row{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px}
+.score-num{
+  font-size:68px;font-weight:700;line-height:.86;letter-spacing:-.045em;
+  font-variant-numeric:tabular-nums;
 }
+.score-meta{display:flex;flex-direction:column;gap:2px;padding-top:6px}
+.score-of{font-size:13px;font-weight:500;opacity:.55}
+.score-for{font-size:12.5px;font-weight:400;opacity:.7}
+.verdict{
+  margin-inline-start:auto;align-self:flex-start;
+  font-size:12px;font-weight:500;padding:6px 12px;border-radius:14px;
+  background:rgba(14,17,19,.09);
+}
+.hero:not(.glassy) .verdict{background:var(--mist);color:var(--aqua-600)}
+.hero:not(.glassy) .score-num{color:var(--text-1)}
+
+.readout{display:flex;flex-direction:column;gap:11px}
+.height-line{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.height-num{
+  font-size:29px;font-weight:600;letter-spacing:-.02em;
+  font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate;
+}
+.height-slang{font-size:16px;font-weight:500;opacity:.82}
+
+.state-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pill{
+  font-size:12.5px;font-weight:500;padding:6px 13px;border-radius:14px;
+  display:inline-flex;align-items:center;gap:6px;
+}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none}
+.hero.glassy .pill{background:rgba(255,255,255,.34);color:var(--ink)}
+.pill-choppy{background:rgba(232,102,60,.12);color:var(--state-choppy)}
+.pill-flat{background:#F1F5F6;color:var(--state-flat)}
+
+.wind-line{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:400}
+.arrow{width:26px;height:26px;flex:none;opacity:.9}
+.wind-val{
+  font-weight:600;font-variant-numeric:tabular-nums;
+  direction:ltr;unicode-bidi:isolate;
+}
+.wind-word{opacity:.78}
+
+.synthetic{
+  margin-top:13px;padding-top:12px;border-top:1px solid rgba(14,17,19,.13);
+  font-size:11.5px;line-height:1.5;opacity:.72;display:flex;gap:7px;align-items:flex-start;
+}
+.synthetic svg{width:13px;height:13px;flex:none;margin-top:2px}
+
+/* ---------- best window ---------- */
+.window{
+  background:var(--paper);border-radius:28px;padding:16px 18px;margin-bottom:12px;
+  box-shadow:var(--shadow-card);border:1px solid var(--hairline);
+  position:relative;overflow:hidden;
+}
+.window::after{
+  content:"";position:absolute;inset-inline-start:0;top:0;bottom:0;width:3px;
+  background:var(--orb);
+}
+.window-k{font-size:11.5px;font-weight:500;color:var(--text-2);letter-spacing:.01em}
+.window-v{
+  display:block;margin-top:4px;font-size:21px;font-weight:600;letter-spacing:-.02em;
+  direction:ltr;unicode-bidi:isolate;text-align:start;
+}
+.window.rtl-text .window-v{direction:rtl}
+.window-note{display:block;margin-top:3px;font-size:12px;color:var(--text-2)}
+.window.none::after{background:var(--state-flat);opacity:.4}
+.window.none .window-v{font-size:17px;color:var(--text-1)}
+
+/* ---------- hourly ---------- */
+.hourly{
+  background:var(--paper);border-radius:28px;padding:16px 18px 14px;margin-bottom:12px;
+  box-shadow:var(--shadow-card);border:1px solid var(--hairline);
+}
+.sec-title{font-size:11.5px;font-weight:500;color:var(--text-2);display:block;margin-bottom:12px}
+.bars{display:flex;gap:5px;align-items:flex-end;height:76px;position:relative;isolation:isolate}
+.bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;justify-content:flex-end;height:100%;position:relative}
+.bar i{
+  display:block;width:100%;border-radius:7px;background:var(--mist);min-height:4px;
+}
+.bar.good i{background:var(--aqua-500)}
+.bar.mid i{background:var(--aqua-400);opacity:.55}
+.bar span{font-size:10px;color:var(--text-2);font-family:var(--mono)}
+.bar.now i{outline:2px solid var(--ink);outline-offset:1px}
+.bar.now span{color:var(--text-1);font-weight:500}
+/* the orb, used once per screen: it washes the recommended hours */
+.bar.win::before{
+  content:"";position:absolute;inset:-6px -2px 14px;border-radius:10px;
+  background:var(--orb);opacity:.22;z-index:-1;
+}
+
+/* ---------- verification strip ---------- */
+.buoy{
+  background:var(--paper);border-radius:28px;padding:16px 18px;margin-bottom:14px;
+  box-shadow:var(--shadow-card);border:1px solid var(--hairline);
+}
+.buoy-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
+.buoy-name{font-size:12.5px;font-weight:500;color:var(--text-2)}
+.tag{font-size:10.5px;font-weight:500;padding:4px 9px;border-radius:11px;display:inline-flex;align-items:center;gap:5px}
+.tag .dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.tag-fresh{background:var(--mist);color:var(--aqua-600)}
+.tag-dead{background:#F1F5F6;color:var(--state-flat)}
+.buoy-read{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.buoy-num{font-size:22px;font-weight:600;letter-spacing:-.02em;direction:ltr;unicode-bidi:isolate}
+.buoy-age{font-size:12.5px;color:var(--text-2)}
+.buoy-dead-line{font-size:13.5px;font-weight:500;color:var(--text-1)}
+.buoy-dead-note{font-size:12px;color:var(--text-2);margin-top:3px;line-height:1.5}
+
+/* ---------- expand affordance ---------- */
+.expand{
+  width:100%;height:52px;border-radius:26px;border:0;background:var(--ink);color:#fff;
+  font-family:var(--sans);font-size:14px;font-weight:500;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:var(--shadow-btn);margin-bottom:14px;cursor:pointer;
+}
+.expand svg{width:15px;height:15px}
+
+/* ---------- tab bar ---------- */
+.tabbar{
+  display:flex;justify-content:space-around;align-items:center;
+  background:rgba(255,255,255,.86);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+  border-top:1px solid var(--hairline);
+  padding:10px 18px 20px;box-shadow:var(--shadow-btn);
+}
+.tab{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--text-2);font-size:10.5px;font-weight:500}
+.tab.on{color:var(--ink)}
+.tab svg{width:21px;height:21px}
+
+/* ============================================================
+   WEEK
+   ============================================================ */
+.wk-head{padding:12px 4px 16px}
+.wk-title{font-size:26px;font-weight:600;letter-spacing:-.02em;line-height:1.2}
+.wk-title .light{font-weight:300}
+.wk-sub{font-size:13px;color:var(--text-2);margin-top:2px}
+
+.wk-rows{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+.wk-row{
+  background:var(--paper);border-radius:24px;padding:13px 15px;
+  box-shadow:var(--shadow-card);border:1px solid var(--hairline);
+  display:flex;align-items:center;gap:13px;min-height:44px;
+}
+.wk-row.peak{background:linear-gradient(150deg,var(--aqua-400),var(--aqua-500) 60%,var(--aqua-600));border-color:transparent;color:var(--ink);box-shadow:0 14px 34px rgba(31,178,184,.26)}
+.wk-day{width:44px;flex:none}
+.wk-dow{font-size:13.5px;font-weight:500;line-height:1.2}
+.wk-date{font-size:11px;color:var(--text-2);font-family:var(--mono)}
+.wk-row.peak .wk-date{color:rgba(14,17,19,.6)}
+.wk-score{
+  font-size:25px;font-weight:700;letter-spacing:-.03em;width:42px;flex:none;text-align:center;
+  font-variant-numeric:tabular-nums;
+}
+.wk-score.lo{color:var(--state-flat)}
+.wk-body{flex:1;min-width:0}
+.wk-h{font-size:14px;font-weight:500;line-height:1.3}
+.wk-h .num{direction:ltr;unicode-bidi:isolate;font-variant-numeric:tabular-nums}
+.wk-w{font-size:11.5px;color:var(--text-2);line-height:1.35;margin-top:1px}
+.wk-row.peak .wk-w{color:rgba(14,17,19,.66)}
+.wk-spark{width:34px;height:30px;flex:none;opacity:.9}
+.wk-alert{width:17px;height:17px;flex:none;color:var(--alert)}
+
+/* ============================================================
+   FAILED / STALE
+   ============================================================ */
+.fail-card{
+  background:var(--paper);border-radius:28px;padding:20px;margin-bottom:12px;
+  box-shadow:var(--shadow-card);border:1px solid var(--hairline);
+}
+.fail-icon{
+  width:40px;height:40px;border-radius:50%;background:#F1F5F6;color:var(--state-flat);
+  display:grid;place-items:center;margin-bottom:13px;
+}
+.fail-icon svg{width:19px;height:19px}
+.fail-title{font-size:17px;font-weight:600;letter-spacing:-.015em;margin-bottom:5px;text-wrap:balance}
+.fail-body{font-size:13px;line-height:1.6;color:var(--text-2);margin:0 0 14px}
+.retry{
+  height:44px;border-radius:22px;border:1px solid var(--hairline);background:var(--paper);
+  font-family:var(--sans);font-size:13.5px;font-weight:500;color:var(--text-1);
+  padding:0 20px;box-shadow:var(--shadow-btn);cursor:pointer;
+}
+.skeleton{
+  background:linear-gradient(90deg,var(--hairline) 25%,#FAFCFD 50%,var(--hairline) 75%);
+  background-size:200% 100%;border-radius:12px;height:13px;
+}
+.skel-row{display:flex;flex-direction:column;gap:9px;margin-top:4px}
+@media (prefers-reduced-motion:no-preference){
+  .skeleton{animation:sweep 1.7s linear infinite}
+}
+@keyframes sweep{from{background-position:200% 0}to{background-position:-200% 0}}
+
+/* ---------- notes table ---------- */
+.notes{margin-top:8px}
+.notes h2{
+  font-size:13px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--text-2);margin:0 0 20px;
+}
+.tablewrap{overflow-x:auto;border-radius:20px;border:1px solid var(--rule);background:var(--page-2)}
+table{border-collapse:collapse;width:100%;min-width:520px;font-size:13.5px}
+th,td{text-align:start;padding:13px 16px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-weight:500;font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--text-2)}
+tr:last-child td{border-bottom:0}
+td b{font-weight:500}
+td.cut{color:var(--text-2)}
+code{font-family:var(--mono);font-size:.9em;background:var(--code-bg);padding:2px 6px;border-radius:6px;color:var(--aqua-600)}
+
+:focus-visible{outline:2px solid var(--aqua-600);outline-offset:2px;border-radius:6px}
 </style>
 
 <div class="wrap">
 
-  <header class="masthead">
-    <div class="eyebrow">SurfCore · screen study</div>
-    <h1>Glassy</h1>
+  <header>
+    <div class="eyebrow">SurfCore · screen study · v2</div>
+    <h1 class="wordmark">Glass<b>y</b></h1>
     <p class="standfirst">
-      Four screens for the Israeli surf forecast app, drawn from a live run of the
-      <code style="font-family:'IBM Plex Mono',monospace;font-size:0.92em">SurfCore</code> engine.
-      Every number below came out of the real pipeline against the real APIs — nothing here is placeholder.
-      The screens were chosen to show the four states that are easy to get wrong, not the four that look best.
+      Four screens for the Israeli surf forecast, in the <strong>aqua art direction</strong>.
+      The aqua is <strong>earned, not applied</strong>: the hero card floods with it only when the sea
+      is genuinely glassy, so opening the app to a wall of blue is itself the forecast.
+      Every number came out of a live <code>SurfCore</code> run against the real APIs this morning —
+      the screens were chosen for the four states that are easy to get wrong, not the four that look best.
     </p>
     <div class="provenance">
-      <span class="chip">run <b>2026-08-25 21:38 IDT</b></span>
+      <span class="chip">run <b>2026-08-26 10:00–10:27 IDT</b></span>
       <span class="chip">Open-Meteo <b>best_match</b> · 168 h</span>
-      <span class="chip">ISRAMAR <b>Hadera live</b> · Shikmona dead</span>
+      <span class="chip">ISRAMAR <b>Hadera live</b> · Shikmona dead 7 mo</span>
       <span class="chip">locale <b>he-IL · RTL</b></span>
+      <span class="chip">type <b>Rubik</b></span>
     </div>
   </header>
 
+  <hr class="rule">
+
   <div class="grid">
 
-    <!-- ============ 1. HADERA — the honest flat day ============ -->
+    <!-- ===================== 01 · HOME · HADERA ===================== -->
     <section class="slot">
       <div class="slot-label">
-        <span class="slot-num">01 — HOME</span>
-        <span class="slot-name">חדרה · a flat Tuesday</span>
+        <span class="slot-num">Home · glassy</span>
+        <span class="slot-name">חדרה · 10:00</span>
       </div>
 
       <div class="phone">
         <div class="screen">
-          <div class="statusbar"><span>21:38</span><span class="dots">▮▮▮ ⌁ 84%</span></div>
+          <div class="statusbar"><span>10:00</span><span class="sig">▮▮▮ ⌁ 84%</span></div>
           <div class="app">
 
             <div class="spot-head">
               <div>
+                <div class="spot-greet">בוקר טוב</div>
                 <div class="spot-name">חדרה</div>
-                <div class="spot-sub">חשיפה 0.85 · עומק שבירה 2.0 מ׳</div>
               </div>
-              <span class="switcher">⌄</span>
+              <div class="utility" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/>
+                </svg>
+              </div>
             </div>
 
             <div class="sportbar">
@@ -491,316 +479,137 @@ h1 {
               <span class="sport">סאפ</span>
             </div>
 
-            <div class="hero">
+            <div class="hero glassy">
               <div class="score-row">
-                <div class="score-num s-lo">31</div>
+                <div class="score-num">42</div>
                 <div class="score-meta">
                   <span class="score-of">/ 100</span>
                   <span class="score-for">גלישה · בינוני</span>
                 </div>
+                <span class="verdict">חלש</span>
               </div>
 
               <div class="readout">
                 <div class="height-line">
-                  <span class="height-num">0.45 מ׳</span>
+                  <span class="height-num">0.5 מ׳</span>
                   <span class="height-slang">קרסול עד ברך</span>
                 </div>
-                <div class="pill-row">
-                  <span class="pill pill-glass">גלאסי</span>
-                  <span class="pill pill-flat">מחזור 4.5 שנ׳</span>
+
+                <div class="state-row">
+                  <span class="pill"><i class="dot"></i>גלאסי</span>
                 </div>
+
                 <div class="wind-line">
                   <svg class="arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <g transform="rotate(79 12 12)">
-                      <path d="M12 4 L12 20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-                      <path d="M7.5 15.5 L12 20 L16.5 15.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    <g transform="rotate(49 12 12)">
+                      <path d="M12 4.5 L12 19.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                      <path d="M7.8 15.3 L12 19.5 L16.2 15.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
                     </g>
-                    <circle cx="12" cy="12" r="10.5" stroke="currentColor" stroke-width="0.7" opacity="0.28"/>
+                    <circle cx="12" cy="12" r="10.6" stroke="currentColor" stroke-width=".8" opacity=".3"/>
                   </svg>
-                  <span class="wind-val">1 קשר</span>
-                  <span>רוח מהים · 259°</span>
+                  <span class="wind-val">4 קשר</span>
+                  <span class="wind-word">מהים</span>
                 </div>
               </div>
             </div>
 
-            <div class="window none">
+            <div class="window">
               <span class="window-k">החלון הטוב ביותר היום</span>
-              <span class="window-v">אין חלון גלישה היום</span>
-              <span class="window-note">השיא היום 39 — לא שווה את הנסיעה</span>
+              <span class="window-v">18:00–20:00</span>
+              <span class="window-note">שיא 44 — ערב, אחרי שהרוח נופלת</span>
             </div>
 
             <div class="hourly">
               <span class="sec-title">שעה אחר שעה</span>
               <div class="bars">
-                <div class="bar"><i style="height:22%"></i><span>18</span></div>
-                <div class="bar"><i style="height:26%"></i><span>19</span></div>
-                <div class="bar"><i style="height:30%"></i><span>20</span></div>
-                <div class="bar"><i style="height:33%"></i><span>21</span></div>
-                <div class="bar now"><i style="height:31%"></i><span>22</span></div>
-                <div class="bar"><i style="height:34%"></i><span>23</span></div>
-                <div class="bar"><i style="height:36%"></i><span>00</span></div>
-                <div class="bar"><i style="height:39%"></i><span>01</span></div>
+                <div class="bar now"><i style="height:42%"></i><span>10</span></div>
+                <div class="bar"><i style="height:39%"></i><span>11</span></div>
+                <div class="bar"><i style="height:37%"></i><span>12</span></div>
+                <div class="bar"><i style="height:36%"></i><span>13</span></div>
+                <div class="bar"><i style="height:38%"></i><span>15</span></div>
+                <div class="bar mid win"><i style="height:41%"></i><span>18</span></div>
+                <div class="bar good win"><i style="height:44%"></i><span>19</span></div>
+                <div class="bar mid win"><i style="height:42%"></i><span>20</span></div>
               </div>
             </div>
 
             <div class="buoy">
               <div class="buoy-head">
                 <span class="buoy-name">מצוף חדרה · ISRAMAR</span>
-                <span class="tag tag-fresh">עדכני</span>
+                <span class="tag tag-fresh"><i class="dot"></i>עדכני</span>
               </div>
               <div class="buoy-read">
-                <span class="buoy-num">0.69 מ׳</span>
-                <span class="buoy-age">מחזור 6.2 שנ׳ · נמדד לפני שעה</span>
+                <span class="buoy-num">0.56 מ׳</span>
+                <span class="buoy-age">נמדד לפני שעה</span>
               </div>
-              <div class="buoy-cmp">מודל בים הפתוח 0.54 מ׳ · פער ‎−0.15 מ׳</div>
             </div>
 
+            <button class="expand">
+              הנתונים המלאים
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+          </div>
+
+          <div class="tabbar">
+            <span class="tab on">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/></svg>
+              בית
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="4"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+              שבוע
+            </span>
+            <span class="tab">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>
+              חופים
+            </span>
           </div>
         </div>
       </div>
 
       <p class="slot-why">
-        The unglamorous state, and the one that earns trust. The engine found <b>no window at all</b>,
-        so the screen says so rather than naming the least-bad hours. Underneath, the live Hadera buoy
-        sits <b>0.15 m</b> from the model — the app showing its working.
+        A glassy morning with nothing in it. The card floods aqua because the <b>surface</b> is
+        beautiful — and still says <b>42</b>, because the swell is ankle-high. Colour carries sea
+        state, never the verdict, so the two facts don't have to agree. The buoy read
+        <b>0.56 m</b> and the model read <b>0.56 m</b> for the same hour; the delta that proves it
+        moved to Layer 2, where an analyst can find it.
       </p>
     </section>
 
-    <!-- ============ 2. EILAT — hazard outranks score ============ -->
+    <!-- ===================== 02 · HOME · EILAT ===================== -->
     <section class="slot">
       <div class="slot-label">
-        <span class="slot-num">02 — HOME · HAZARD</span>
-        <span class="slot-name">אילת · the pretty killer</span>
+        <span class="slot-num">Home · hazard</span>
+        <span class="slot-name">אילת · שיא הרוח</span>
       </div>
 
       <div class="phone">
         <div class="screen">
-          <div class="statusbar"><span>21:30</span><span class="dots">▮▮▮ ⌁ 84%</span></div>
+          <div class="statusbar"><span>16:00</span><span class="sig">▮▮▮ ⌁ 71%</span></div>
           <div class="app">
 
-            <div class="alert-banner">
-              <div class="alert-head">
-                <svg class="alert-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M12 3 L22 20 H2 Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
-                  <path d="M12 10 v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-                  <circle cx="12" cy="17.2" r="1.05" fill="currentColor"/>
+            <div class="safety" role="alert">
+              <div class="safety-head">
+                <svg class="safety-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 3.6 1.8 21h20.4z"/><path d="M12 10v4.6"/><circle cx="12" cy="17.8" r=".1"/>
                 </svg>
-                <span>רוח מהיבשה – סכנת סחיפה לים</span>
+                <span class="safety-title">סכנת סחיפה לים</span>
               </div>
-              <div class="alert-body">
-                הים נראה שטוח ורגוע מהחוף, אבל זו אשליה: מעבר לצל הרוח של הבניינים והמצוק
-                הרוח מכה בעוצמה של 9 קשר ודוחפת אל הים הפתוח, מהר יותר ממה שאפשר לחתור בחזרה.
-                מתחילים, גולשי סאפ וקיאקים – אין להיכנס למים.
-              </div>
+              <p class="safety-body">
+                רוח מזרחית 15 קשר. מהחוף הים נראה שטוח כי הרוח בגב —
+                מעבר לקו המבנים היא דוחפת החוצה מהר יותר מכפי שאפשר לחתור בחזרה.
+              </p>
+              <span class="safety-who">מתחילים · סאפ · קיאק — לא להיכנס</span>
             </div>
 
             <div class="spot-head">
               <div>
+                <div class="spot-greet">אחר הצהריים</div>
                 <div class="spot-name">חוף הכפר, אילת</div>
-                <div class="spot-sub">מפרץ אילת · ים סגור</div>
               </div>
-              <span class="switcher">⌄</span>
-            </div>
-
-            <div class="sportbar">
-              <span class="sport">גלישה</span>
-              <span class="sport">קייט</span>
-              <span class="sport">ווינג</span>
-              <span class="sport on">סאפ</span>
-            </div>
-
-            <div class="hero">
-              <div class="score-row">
-                <div class="score-num s-lo">3</div>
-                <div class="score-meta">
-                  <span class="score-of">/ 100</span>
-                  <span class="score-for">סאפ · מתחיל</span>
-                </div>
+              <div class="utility" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></svg>
               </div>
-
-              <div class="readout">
-                <div class="height-line">
-                  <span class="height-num">0.37 מ׳</span>
-                  <span class="height-slang">קרסול עד ברך</span>
-                </div>
-                <div class="pill-row">
-                  <span class="pill pill-glass">גלאסי</span>
-                  <span class="pill pill-flat">מחזור 4.4 שנ׳</span>
-                </div>
-                <div class="wind-line">
-                  <svg class="arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <g transform="rotate(179 12 12)">
-                      <path d="M12 4 L12 20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-                      <path d="M7.5 15.5 L12 20 L16.5 15.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                    </g>
-                    <circle cx="12" cy="12" r="10.5" stroke="currentColor" stroke-width="0.7" opacity="0.28"/>
-                  </svg>
-                  <span class="wind-val">9 קשר</span>
-                  <span>רוח מהיבשה · 359°</span>
-                </div>
-                <div class="synthetic">
-                  <span>ⓘ</span>
-                  <span>מחושב מקומית מהרוח — מודלי הגלים אינם מכסים את מפרץ אילת</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="buoy">
-              <div class="buoy-head">
-                <span class="buoy-name">מצוף</span>
-                <span class="tag tag-dead">אין</span>
-              </div>
-              <div class="buoy-dead">אין מצוף מדידה באזור זה. התחזית אינה מאומתת מול מדידה בפועל.</div>
-            </div>
-
-          </div>
-        </div>
-      </div>
-
-      <p class="slot-why">
-        Glassy, ankle-high, 34°C — everything about this sea says <i>come in</i>. The engine crushed the
-        SUP score to <b>3</b> and put the banner above it, because a 9-knot offshore is exactly the wind
-        that carries beginners out. Both facts are true at once; the banner wins the hierarchy.
-      </p>
-    </section>
-
-    <!-- ============ 3. WEEK ============ -->
-    <section class="slot">
-      <div class="slot-label">
-        <span class="slot-num">03 — WEEK</span>
-        <span class="slot-name">חדרה · a swell arrives Saturday</span>
-      </div>
-
-      <div class="phone">
-        <div class="screen">
-          <div class="statusbar"><span>21:38</span><span class="dots">▮▮▮ ⌁ 84%</span></div>
-          <div class="app">
-
-            <div class="spot-head">
-              <div>
-                <div class="spot-name">תחזית שבועית</div>
-                <div class="spot-sub">חדרה · גלישה · בינוני</div>
-              </div>
-              <span class="switcher">⌄</span>
-            </div>
-
-            <div class="week">
-              <div class="wrow">
-                <div><div class="wday">ג׳</div><div class="wdate">25.8</div></div>
-                <div class="wscore"><span class="wscore-n s-lo">39</span></div>
-                <div class="wdetail">
-                  <div class="wmain"><b>0.49 מ׳</b><span>קרסול עד ברך</span></div>
-                  <div class="wbar"><i style="width:39%;background:var(--ink-3)"></i></div>
-                </div>
-                <div class="wwin empty">—</div>
-              </div>
-
-              <div class="wrow">
-                <div><div class="wday">ד׳</div><div class="wdate">26.8</div></div>
-                <div class="wscore"><span class="wscore-n s-lo">28</span></div>
-                <div class="wdetail">
-                  <div class="wmain"><b>0.43 מ׳</b><span>קרסול עד ברך</span></div>
-                  <div class="wbar"><i style="width:28%;background:var(--ink-3)"></i></div>
-                </div>
-                <div class="wwin empty">—</div>
-              </div>
-
-              <div class="wrow">
-                <div><div class="wday">ה׳</div><div class="wdate">27.8</div></div>
-                <div class="wscore"><span class="wscore-n s-lo">29</span></div>
-                <div class="wdetail">
-                  <div class="wmain"><b>0.43 מ׳</b><span>קרסול עד ברך</span></div>
-                  <div class="wbar"><i style="width:29%;background:var(--ink-3)"></i></div>
-                </div>
-                <div class="wwin empty">—</div>
-              </div>
-
-              <div class="wrow">
-                <div><div class="wday">ו׳</div><div class="wdate">28.8</div></div>
-                <div class="wscore"><span class="wscore-n s-lo">25</span></div>
-                <div class="wdetail">
-                  <div class="wmain"><b>0.41 מ׳</b><span>קרסול עד ברך</span></div>
-                  <div class="wbar"><i style="width:25%;background:var(--ink-3)"></i></div>
-                </div>
-                <div class="wwin empty">—</div>
-              </div>
-
-              <div class="wrow">
-                <div><div class="wday">ש׳</div><div class="wdate">29.8</div></div>
-                <div class="wscore"><span class="wscore-n s-hi">81</span></div>
-                <div class="wdetail">
-                  <div class="wmain"><b>0.86 מ׳</b><span>מותן עד חזה</span></div>
-                  <div class="wbar"><i style="width:81%;background:var(--glass)"></i></div>
-                </div>
-                <div class="wwin">18:00–00:00</div>
-              </div>
-
-              <div class="wrow">
-                <div><div class="wday">א׳</div><div class="wdate">30.8</div></div>
-                <div class="wscore"><span class="wscore-n s-hi">84</span></div>
-                <div class="wdetail">
-                  <div class="wmain"><b>1.15 מ׳</b><span>כתף עד ראש</span></div>
-                  <div class="wbar"><i style="width:84%;background:var(--glass)"></i></div>
-                </div>
-                <div class="wwin">כל היום</div>
-              </div>
-
-              <div class="wrow">
-                <div><div class="wday">ב׳</div><div class="wdate">31.8</div></div>
-                <div class="wscore"><span class="wscore-n s-hi">78</span></div>
-                <div class="wdetail">
-                  <div class="wmain"><b>0.84 מ׳</b><span>מותן עד חזה</span></div>
-                  <div class="wbar"><i style="width:78%;background:var(--glass)"></i></div>
-                </div>
-                <div class="wwin">00:00–14:00</div>
-              </div>
-
-              <div class="wrow">
-                <div><div class="wday">ג׳</div><div class="wdate">1.9</div></div>
-                <div class="wscore"><span class="wscore-n s-mid">60</span></div>
-                <div class="wdetail">
-                  <div class="wmain"><b>0.56 מ׳</b><span>מותן עד חזה</span></div>
-                  <div class="wbar"><i style="width:60%;background:var(--chop)"></i></div>
-                </div>
-                <div class="wwin">00:00–03:00</div>
-              </div>
-            </div>
-
-            <div class="window some" style="margin-top:auto">
-              <span class="window-k">הכי טוב השבוע</span>
-              <span class="window-v">ראשון 30.8 · 84</span>
-              <span class="window-note" style="color:var(--glass)">1.15 מ׳ · כתף עד ראש · גלאסי כל היום</span>
-            </div>
-
-          </div>
-        </div>
-      </div>
-
-      <p class="slot-why">
-        Each row promises a <b>time of day</b>, not a calendar day — the peak and the window that produces it.
-        A daily average of Sunday would read about 55 and describe no hour that actually exists.
-        Four flat days then a real swell: the shape of the week is legible without reading a number.
-      </p>
-    </section>
-
-    <!-- ============ 4. HAIFA — dead buoy ============ -->
-    <section class="slot">
-      <div class="slot-label">
-        <span class="slot-num">04 — HOME · STALE SOURCE</span>
-        <span class="slot-name">חיפה · the buoy that lies</span>
-      </div>
-
-      <div class="phone">
-        <div class="screen">
-          <div class="statusbar"><span>21:29</span><span class="dots">▮▮▮ ⌁ 83%</span></div>
-          <div class="app">
-
-            <div class="spot-head">
-              <div>
-                <div class="spot-name">בקדור, חיפה</div>
-                <div class="spot-sub">מפרץ חיפה · חשיפה 0.50</div>
-              </div>
-              <span class="switcher">⌄</span>
             </div>
 
             <div class="sportbar">
@@ -810,105 +619,297 @@ h1 {
               <span class="sport">סאפ</span>
             </div>
 
-            <div class="hero">
+            <div class="hero glassy">
               <div class="score-row">
-                <div class="score-num s-lo">2</div>
+                <div class="score-num">35</div>
                 <div class="score-meta">
                   <span class="score-of">/ 100</span>
-                  <span class="score-for">גלישה · מתחיל</span>
+                  <span class="score-for">גלישה · בינוני</span>
                 </div>
+                <span class="verdict">חלש</span>
               </div>
 
               <div class="readout">
                 <div class="height-line">
-                  <span class="height-num">0.26 מ׳</span>
-                  <span class="height-slang">קרסול עד ברך</span>
+                  <span class="height-num">0.6 מ׳</span>
+                  <span class="height-slang">מותן עד חזה</span>
                 </div>
-                <div class="pill-row">
-                  <span class="pill pill-glass">גלאסי</span>
-                  <span class="pill pill-flat">בים הפתוח 0.52 מ׳</span>
+
+                <div class="state-row">
+                  <span class="pill"><i class="dot"></i>גלאסי</span>
                 </div>
+
                 <div class="wind-line">
                   <svg class="arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <g transform="rotate(130 12 12)">
-                      <path d="M12 4 L12 20" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-                      <path d="M7.5 15.5 L12 20 L16.5 15.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                    <g transform="rotate(199 12 12)">
+                      <path d="M12 4.5 L12 19.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+                      <path d="M7.8 15.3 L12 19.5 L16.2 15.3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
                     </g>
-                    <circle cx="12" cy="12" r="10.5" stroke="currentColor" stroke-width="0.7" opacity="0.28"/>
+                    <circle cx="12" cy="12" r="10.6" stroke="currentColor" stroke-width=".8" opacity=".3"/>
                   </svg>
-                  <span class="wind-val">5 קשר</span>
-                  <span>רוח מהים · 310°</span>
+                  <span class="wind-val">15 קשר</span>
+                  <span class="wind-word">מהיבשה</span>
                 </div>
-                <div class="synthetic" style="color:var(--ink-3)">
-                  <span>ⓘ</span>
-                  <span>המפרץ חוסם כמחצית מאנרגיית הגלים — ‎×0.50 מהים הפתוח</span>
+
+                <div class="synthetic">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v5.5"/><circle cx="12" cy="7.6" r=".1"/></svg>
+                  <span>מחושב מקומית מהרוח — מפרץ אילת אינו מכוסה במודל הגלים</span>
                 </div>
               </div>
             </div>
 
-            <div class="window none">
+            <div class="window none rtl-text">
               <span class="window-k">החלון הטוב ביותר היום</span>
               <span class="window-v">אין חלון גלישה היום</span>
+              <span class="window-note">השיא היום 35 — לא שווה את הנסיעה</span>
             </div>
 
             <div class="buoy">
               <div class="buoy-head">
-                <span class="buoy-name">מצוף שקמונה · ISRAMAR</span>
-                <span class="tag tag-dead">לא פעיל</span>
+                <span class="buoy-name">מצוף קרוב</span>
+                <span class="tag tag-dead"><i class="dot"></i>אין</span>
               </div>
-              <div class="buoy-read">
-                <span class="buoy-num strike">4.09 מ׳</span>
-                <span class="buoy-age">נמדד לפני 227 יום</span>
-              </div>
-              <div class="buoy-dead">
-                המצוף אינו משדר. המדידה האחרונה ישנה מכדי להציג אותה כמצב הים הנוכחי.
-              </div>
+              <div class="buoy-dead-line">אין מצוף במפרץ אילת</div>
+              <div class="buoy-dead-note">אין דרך לאמת את התחזית הזו מול מדידה. היא נגזרת מרוח בלבד.</div>
             </div>
 
+            <button class="expand">
+              הנתונים המלאים
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+          </div>
+
+          <div class="tabbar">
+            <span class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/></svg>בית</span>
+            <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="4"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>שבוע</span>
+            <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>חופים</span>
           </div>
         </div>
       </div>
 
       <p class="slot-why">
-        The Shikmona endpoint still answers <b>HTTP 200</b> with a 4.09 m storm reading — from January.
-        Rendered as live during a flat August evening it would be the worst bug the app could ship.
-        The screen names the failure instead of hiding it, and strikes through the number it refuses to trust.
+        The screen that has to be right. Ink outranks aqua, so the banner beats the hero without
+        a red block fighting the palette — and it sits <b>above the spot name</b>, not just above
+        the score. Note the sea is still drawn as glassy, because it genuinely is: that is the
+        illusion the copy names. Eilat also carries its <b>locally derived</b> label and admits it
+        has no buoy to check itself against.
+      </p>
+    </section>
+
+    <!-- ===================== 03 · WEEK ===================== -->
+    <section class="slot">
+      <div class="slot-label">
+        <span class="slot-num">Week</span>
+        <span class="slot-name">פלמחים · שבעה ימים</span>
+      </div>
+
+      <div class="phone">
+        <div class="screen">
+          <div class="statusbar"><span>10:26</span><span class="sig">▮▮▮ ⌁ 83%</span></div>
+          <div class="app">
+
+            <div class="wk-head">
+              <div class="wk-title"><span class="light">השבוע ב</span>פלמחים</div>
+              <div class="wk-sub">ראשון הוא היום</div>
+            </div>
+
+            <div class="wk-rows">
+
+              <div class="wk-row">
+                <div class="wk-day"><div class="wk-dow">רביעי</div><div class="wk-date">26.8</div></div>
+                <div class="wk-score">50</div>
+                <div class="wk-body">
+                  <div class="wk-h"><span class="num">0.5 מ׳</span> · קרסול עד ברך</div>
+                  <div class="wk-w">03:00–12:00</div>
+                </div>
+                <svg class="wk-spark" viewBox="0 0 34 30" fill="none" aria-hidden="true"><path d="M1 22 L7 18 L13 16 L19 19 L25 23 L33 25" stroke="var(--aqua-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+
+              <div class="wk-row">
+                <div class="wk-day"><div class="wk-dow">חמישי</div><div class="wk-date">27.8</div></div>
+                <div class="wk-score lo">40</div>
+                <div class="wk-body">
+                  <div class="wk-h"><span class="num">0.5 מ׳</span> · קרסול עד ברך</div>
+                  <div class="wk-w">00:00–02:00 בלבד</div>
+                </div>
+                <svg class="wk-spark" viewBox="0 0 34 30" fill="none" aria-hidden="true"><path d="M1 17 L7 21 L13 24 L19 25 L25 26 L33 26" stroke="var(--state-flat)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+
+              <div class="wk-row">
+                <div class="wk-day"><div class="wk-dow">שישי</div><div class="wk-date">28.8</div></div>
+                <div class="wk-score lo">26</div>
+                <div class="wk-body">
+                  <div class="wk-h"><span class="num">0.4 מ׳</span> · קרסול עד ברך</div>
+                  <div class="wk-w">אין חלון</div>
+                </div>
+                <svg class="wk-spark" viewBox="0 0 34 30" fill="none" aria-hidden="true"><path d="M1 26 L7 27 L13 27 L19 26 L25 25 L33 23" stroke="var(--state-flat)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+
+              <div class="wk-row">
+                <div class="wk-day"><div class="wk-dow">שבת</div><div class="wk-date">29.8</div></div>
+                <div class="wk-score">68</div>
+                <div class="wk-body">
+                  <div class="wk-h"><span class="num">0.7 מ׳</span> · מותן עד חזה</div>
+                  <div class="wk-w">03:00–11:00</div>
+                </div>
+                <svg class="wk-spark" viewBox="0 0 34 30" fill="none" aria-hidden="true"><path d="M1 22 L7 14 L13 9 L19 12 L25 18 L33 22" stroke="var(--aqua-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+
+              <div class="wk-row peak">
+                <div class="wk-day"><div class="wk-dow">ראשון</div><div class="wk-date">30.8</div></div>
+                <div class="wk-score">85</div>
+                <div class="wk-body">
+                  <div class="wk-h"><span class="num">1.5 מ׳</span> · כתף עד ראש</div>
+                  <div class="wk-w">כל היום</div>
+                </div>
+                <svg class="wk-spark" viewBox="0 0 34 30" fill="none" aria-hidden="true"><path d="M1 20 L7 12 L13 5 L19 4 L25 6 L33 10" stroke="var(--ink)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+
+              <div class="wk-row">
+                <div class="wk-day"><div class="wk-dow">שני</div><div class="wk-date">31.8</div></div>
+                <div class="wk-score">77</div>
+                <div class="wk-body">
+                  <div class="wk-h"><span class="num">1.0 מ׳</span> · מותן עד חזה</div>
+                  <div class="wk-w">כל היום</div>
+                </div>
+                <svg class="wk-spark" viewBox="0 0 34 30" fill="none" aria-hidden="true"><path d="M1 10 L7 9 L13 11 L19 13 L25 15 L33 17" stroke="var(--aqua-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+
+              <div class="wk-row">
+                <div class="wk-day"><div class="wk-dow">שלישי</div><div class="wk-date">1.9</div></div>
+                <div class="wk-score">71</div>
+                <div class="wk-body">
+                  <div class="wk-h"><span class="num">0.6 מ׳</span> · מותן עד חזה</div>
+                  <div class="wk-w">עד 12:00</div>
+                </div>
+                <svg class="wk-spark" viewBox="0 0 34 30" fill="none" aria-hidden="true"><path d="M1 13 L7 15 L13 18 L19 21 L25 24 L33 26" stroke="var(--aqua-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+
+            </div>
+          </div>
+
+          <div class="tabbar">
+            <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/></svg>בית</span>
+            <span class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="4"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>שבוע</span>
+            <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>חופים</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="slot-why">
+        Sunday is the day, and you can see that without reading a number — the aqua row is the
+        swell arriving. Each row is a <b>promise about a time of day</b>, never a daily average:
+        Thursday scores 40 but only between midnight and 02:00, and the row says so. Three facts
+        per row and no second numeral, so the eye can run down the column of scores in one pass.
+      </p>
+    </section>
+
+    <!-- ===================== 04 · FAILED + STALE ===================== -->
+    <section class="slot">
+      <div class="slot-label">
+        <span class="slot-num">Failed · stale</span>
+        <span class="slot-name">בקדור, חיפה</span>
+      </div>
+
+      <div class="phone">
+        <div class="screen">
+          <div class="statusbar"><span>10:27</span><span class="sig">▮▮▮ ⌁ 82%</span></div>
+          <div class="app">
+
+            <div class="spot-head">
+              <div>
+                <div class="spot-greet">בוקר טוב</div>
+                <div class="spot-name">בקדור, חיפה</div>
+              </div>
+              <div class="utility" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></svg>
+              </div>
+            </div>
+
+            <div class="sportbar">
+              <span class="sport on">גלישה</span>
+              <span class="sport">קייט</span>
+              <span class="sport">ווינג</span>
+              <span class="sport">סאפ</span>
+            </div>
+
+            <div class="fail-card">
+              <div class="fail-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                  <path d="M3 7.5c2.6-2 5.4-2 8 0s5.4 2 8 0M3 13c2.6-2 5.4-2 8 0s5.4 2 8 0M3 18.5c2.6-2 5.4-2 8 0s5.4 2 8 0"/>
+                </svg>
+              </div>
+              <div class="fail-title">התחזית לא נטענה</div>
+              <p class="fail-body">
+                שירות המודל לא הגיב. אין נתון אחרון שמור לחוף הזה, ולכן אין מה להציג —
+                אנחנו לא מנחשים.
+              </p>
+              <button class="retry">נסה שוב</button>
+              <div class="skel-row" aria-hidden="true">
+                <div class="skeleton" style="width:64%"></div>
+                <div class="skeleton" style="width:88%"></div>
+                <div class="skeleton" style="width:44%"></div>
+              </div>
+            </div>
+
+            <div class="buoy">
+              <div class="buoy-head">
+                <span class="buoy-name">מצוף שקמונה · ISRAMAR</span>
+                <span class="tag tag-dead"><i class="dot"></i>מושבת</span>
+              </div>
+              <div class="buoy-dead-line">המצוף מושבת</div>
+              <div class="buoy-dead-note">
+                הקריאה האחרונה בת שבעה חודשים ואינה מוצגת. המצוף עדיין משיב לפניות,
+                אבל לא מודד.
+              </div>
+            </div>
+
+            <button class="expand">
+              הנתונים המלאים
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+          </div>
+
+          <div class="tabbar">
+            <span class="tab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/></svg>בית</span>
+            <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="4"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>שבוע</span>
+            <span class="tab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.4"/></svg>חופים</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="slot-why">
+        The two states apps forget, both real this morning. The forecast for Haifa
+        <b>genuinely failed</b> in the live run, so the screen says so and offers a retry rather
+        than a spinner over an empty card. Below it, Shikmona still answers <code>HTTP 200</code>
+        with a frozen <b>4.09 m</b> storm reading from January — the number the app must never
+        print. The buoy section degrades on its own and says <b>why</b>, in words, without a date
+        the user has to do arithmetic on.
       </p>
     </section>
 
   </div>
 
-  <div class="legend">
-    <div class="leg">
-      <h3>Sea state</h3>
-      <ul>
-        <li><span class="sw" style="background:var(--glass)"></span><span><b>גלאסי</b> — swell with weak or offshore wind. The rare one; it gets the only saturated colour.</span></li>
-        <li><span class="sw" style="background:var(--chop)"></span><span><b>צ׳ופי</b> — onshore past ~12 kt, surface torn.</span></li>
-        <li><span class="sw" style="background:var(--ink-3)"></span><span><b>פלטה</b> — under 0.1 m. Nothing breaking.</span></li>
-      </ul>
-    </div>
-    <div class="leg">
-      <h3>Colour is never alone</h3>
-      <ul>
-        <li><span class="sw" style="background:var(--alert)"></span><span>Every state carries its Hebrew word or a glyph beside the colour, so nothing is lost in greyscale or to colour-blindness.</span></li>
-        <li><span class="sw" style="background:var(--sand)"></span><span>Sand marks values the app <b>derived</b> rather than received — Eilat's synthetic waves, Haifa's sheltering factor.</span></li>
-      </ul>
-    </div>
-    <div class="leg">
-      <h3>Direction, under RTL</h3>
-      <ul>
-        <li><span class="sw" style="background:var(--ink-2)"></span><span>Layout mirrors; <b>compass glyphs do not</b>. The arrow points where the wind is going in the real world — 79°, 179°, 130° on these three screens.</span></li>
-        <li><span class="sw" style="background:var(--ink-2)"></span><span>Numerals, units and clock ranges stay LTR inside Hebrew runs.</span></li>
-      </ul>
-    </div>
-  </div>
+  <hr class="rule">
 
-  <p class="footnote">
-    Rendered from a live <code>swift run smoke</code> against Open-Meteo (<code>best_match</code>, 168 h) and
-    ISRAMAR. Heights are post-transform: shoaling, refraction, per-spot sheltering, then the 0.78 × depth
-    breaking cap. Hourly bars on screen 01 are indicative of the shape the engine produced; every other
-    figure is verbatim. Two vocabulary calls are still unconfirmed by a local surfer — the 1.5–2.2 m band
-    (<code>ראש</code>) and the middle sea state (<code>סביר</code>), neither of which appears in these four screens.
-  </p>
+  <section class="notes">
+    <h2>What the glance layer stopped saying</h2>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Was on screen</th><th>Now</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="cut"><code>חשיפה 0.85 · עומק שבירה 2.0 מ׳</code></td><td>Cut. Transformation inputs, not conditions.</td></tr>
+          <tr><td class="cut"><code>מודל בים הפתוח 0.54 מ׳ · פער ‎−0.15 מ׳</code></td><td>Layer 2. A delta is analyst language.</td></tr>
+          <tr><td class="cut"><code>×0.50 מהים הפתוח</code></td><td>Cut from the hero.</td></tr>
+          <tr><td class="cut">Wind bearing <code>259°</code></td><td>Cut. The arrow and the word carry it.</td></tr>
+          <tr><td class="cut">Period pill beside sea state</td><td>Layer 2. It shapes the score; it is not a glance fact.</td></tr>
+          <tr><td class="cut">Height to 2 decimals</td><td>One decimal. <b>0.5 מ׳</b> — precision nobody can act on is clutter.</td></tr>
+          <tr><td class="cut">Week row: wind + sea state + period</td><td>Score, height with slang, window. Three facts, one second.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
 
 </div>
