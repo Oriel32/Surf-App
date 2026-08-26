@@ -5,8 +5,9 @@ import SurfCore
 /// three seconds, without scrolling or tapping.
 @MainActor
 struct HomeView: View {
-    @Bindable var viewModel: ForecastViewModel
+    @Bindable var model: AppModel
     @Environment(\.colorScheme) private var colorScheme
+    @State private var showingSettings = false
 
     private var theme: Theme { Theme.current(colorScheme) }
 
@@ -19,13 +20,16 @@ struct HomeView: View {
                 .padding(16)
             }
             .background(theme.page.ignoresSafeArea())
-            .navigationTitle(viewModel.selectedSpot?.nameHebrew ?? "גלאסי")
+            .navigationTitle(model.selectedSpot?.nameHebrew ?? "גלאסי")
             .navigationBarTitleDisplayMode(.large)
-            .refreshable { await viewModel.refresh() }
+            .refreshable { await model.refreshSelected() }
             .toolbar { toolbarContent }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView(model: model)
+            }
         }
-        .task(id: viewModel.reloadKey) {
-            await viewModel.load()
+        .task(id: model.reloadKey) {
+            await model.loadSelected()
         }
     }
 
@@ -33,13 +37,13 @@ struct HomeView: View {
 
     @ViewBuilder
     private var stateContent: some View {
-        switch viewModel.state {
+        switch model.selectedState {
         case .loading:
             LoadingSection(theme: theme)
 
         case .failed(let reason):
-            FailureSection(reason: reason, theme: theme) {
-                await viewModel.load()
+            FailureSection(reason: reason, theme: theme) { [model] in
+                await model.loadSelected()
             }
 
         case .loaded(let forecast):
@@ -55,16 +59,44 @@ struct HomeView: View {
     private func loaded(_ forecast: SpotForecast) -> some View {
         // The banner sits above the score, always. Never let a high score
         // visually overwhelm an active safety warning.
-        if let hour = viewModel.currentHour {
+        if let hour = model.currentHour {
             ForEach(hour.alerts, id: \.kind.rawValue) { alert in
-                SafetyBanner(alert: alert)
+                SafetyBanner(alert: alert, theme: theme)
             }
-            HeroSection(hour: hour, theme: theme)
+            HeroSection(hour: hour, heightUnit: model.settings.heightUnit, theme: theme)
         }
 
         BestWindowSection(window: forecast.bestWindowToday, theme: theme)
-        HourlyStrip(hours: viewModel.today, theme: theme)
-        BuoySection(status: forecast.buoy, theme: theme)
+        HourlyStrip(hours: model.today, theme: theme)
+
+        if model.settings.showBuoy {
+            BuoySection(
+                status: forecast.buoy,
+                heightUnit: model.settings.heightUnit,
+                theme: theme
+            )
+        }
+
+        // The one clear affordance into Layer 2.
+        if let spot = model.selectedSpot {
+            NavigationLink {
+                DetailView(model: model, spot: spot, day: Date())
+            } label: {
+                HStack {
+                    Text("כל הנתונים להיום")
+                        .font(SurfFont.cardTitle)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.forward")
+                        .font(.footnote)
+                        .flipsForRightToLeftLayoutDirection(true)
+                }
+                .foregroundStyle(Aqua.aqua600)
+                .padding(16)
+                .tappableRow()
+                .surfCard(theme, radius: Metric.innerRadius)
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     // MARK: - Toolbar
@@ -73,8 +105,8 @@ struct HomeView: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             Menu {
-                Picker("חוף", selection: $viewModel.selectedSpotID) {
-                    ForEach(viewModel.spots) { spot in
+                Picker("חוף", selection: $model.selectedSpotID) {
+                    ForEach(model.spots) { spot in
                         Text(spot.nameHebrew).tag(spot.id)
                     }
                 }
@@ -88,20 +120,24 @@ struct HomeView: View {
             // Switching sport is a normal daily action for anyone who does two
             // of them, not a buried preference. It changes every score at once.
             Menu {
-                Picker("ספורט", selection: $viewModel.profile.sport) {
+                Picker("ספורט", selection: $model.settings.sport) {
                     ForEach(Sport.allCases, id: \.self) { sport in
                         Text(sport.hebrew).tag(sport)
-                    }
-                }
-                Picker("רמה", selection: $viewModel.profile.skill) {
-                    ForEach(SkillLevel.allCases, id: \.self) { skill in
-                        Text(skill.hebrew).tag(skill)
                     }
                 }
             } label: {
                 Image(systemName: "figure.surfing")
             }
-            .accessibilityLabel("בחירת ספורט ורמה")
+            .accessibilityLabel("בחירת ספורט")
+        }
+
+        ToolbarItem(placement: .topBarTrailing) {
+            Button {
+                showingSettings = true
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .accessibilityLabel("הגדרות")
         }
     }
 }
