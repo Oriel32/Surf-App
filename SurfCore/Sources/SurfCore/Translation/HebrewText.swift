@@ -104,6 +104,19 @@ public enum HebrewText {
 
     public static let metersUnit = "\u{05DE}\u{05F3}"
 
+    /// Height in the reader's chosen unit.
+    public static func height(_ meters: Double, unit: HeightUnit) -> String {
+        let value = unit.convert(fromMeters: meters)
+        return "\(ltr(String(format: "%.1f", value))) \(unit.hebrewAbbreviation)"
+    }
+
+    /// The same value spelled out for VoiceOver: no abbreviation, and no
+    /// invisible direction marks for a screen reader to stumble over.
+    public static func spokenHeight(_ meters: Double, unit: HeightUnit) -> String {
+        let value = unit.convert(fromMeters: meters)
+        return "\(String(format: "%.1f", value)) \(unit.spokenHebrew)"
+    }
+
     /// Knots: `8 קשר`.
     public static func knots(_ value: Double) -> String {
         "\(ltr(String(Int(value.rounded())))) קשר"

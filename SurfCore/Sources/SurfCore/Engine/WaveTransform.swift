@@ -201,7 +201,8 @@ public enum WaveTransform {
             openSeaHeightMeters: sample.waveHeightMeters,
             isSynthetic: isSynthetic,
             seaSurfaceTemperatureC: sample.seaSurfaceTemperatureC,
-            airTemperatureC: sample.airTemperatureC
+            airTemperatureC: sample.airTemperatureC,
+            seaLevelMeters: sample.seaLevelMeters
         )
     }
 }

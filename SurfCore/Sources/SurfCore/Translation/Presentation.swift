@@ -44,15 +44,19 @@ public struct ConditionsPresentation: Sendable, Equatable {
 /// or a locale — the caller passes in what it has, and the same input always
 /// produces the same sentence.
 public enum Translator {
-    public static func present(_ forecast: HourlyForecast) -> ConditionsPresentation {
-        present(forecast.conditions, score: forecast.score)
+    public static func present(
+        _ forecast: HourlyForecast,
+        heightUnit: HeightUnit = .meters
+    ) -> ConditionsPresentation {
+        present(forecast.conditions, score: forecast.score, heightUnit: heightUnit)
     }
 
     public static func present(
         _ conditions: SpotConditions,
-        score: MatchScore? = nil
+        score: MatchScore? = nil,
+        heightUnit: HeightUnit = .meters
     ) -> ConditionsPresentation {
-        let heightText = HebrewText.meters(conditions.waveHeightMeters)
+        let heightText = HebrewText.height(conditions.waveHeightMeters, unit: heightUnit)
         let band = conditions.band
         let knots = conditions.windSpeedKnots
         let direction = CompassPoint.point(forDegrees: conditions.windDirectionDegrees)
@@ -83,7 +87,8 @@ public enum Translator {
                 score: score,
                 band: band,
                 direction: direction,
-                knots: knots
+                knots: knots,
+                heightUnit: heightUnit
             )
         )
     }
@@ -96,14 +101,15 @@ public enum Translator {
         score: MatchScore?,
         band: WaveBand,
         direction: CompassPoint,
-        knots: Double
+        knots: Double,
+        heightUnit: HeightUnit
     ) -> String {
         var parts: [String] = []
         if let score {
             parts.append("ציון \(score.value)")
         }
         parts.append(band.hebrew)
-        parts.append(HebrewText.spokenMeters(conditions.waveHeightMeters))
+        parts.append(HebrewText.spokenHeight(conditions.waveHeightMeters, unit: heightUnit))
         parts.append("רוח \(direction.hebrewAdjective) \(HebrewText.spokenKnots(knots))")
         if conditions.isSynthetic {
             parts.append("נגזר מקומית מהרוח")

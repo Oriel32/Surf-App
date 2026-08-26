@@ -121,6 +121,11 @@ public struct SpotConditions: Sendable, Equatable {
     public let seaSurfaceTemperatureC: Double?
     public let airTemperatureC: Double?
 
+    /// Sea level relative to mean, metres. Low in the hierarchy on purpose:
+    /// the Mediterranean tidal range is a few dozen centimetres, so this
+    /// informs where a wave breaks rather than whether to go.
+    public let seaLevelMeters: Double?
+
     public var windSpeedKnots: Double {
         Units.knots(fromMetersPerSecond: windSpeedMPS)
     }
@@ -145,7 +150,8 @@ public struct SpotConditions: Sendable, Equatable {
         openSeaHeightMeters: Double,
         isSynthetic: Bool,
         seaSurfaceTemperatureC: Double? = nil,
-        airTemperatureC: Double? = nil
+        airTemperatureC: Double? = nil,
+        seaLevelMeters: Double? = nil
     ) {
         self.timestamp = timestamp
         self.spotID = spotID
@@ -160,5 +166,6 @@ public struct SpotConditions: Sendable, Equatable {
         self.isSynthetic = isSynthetic
         self.seaSurfaceTemperatureC = seaSurfaceTemperatureC
         self.airTemperatureC = airTemperatureC
+        self.seaLevelMeters = seaLevelMeters
     }
 }
