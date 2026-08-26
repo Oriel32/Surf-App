@@ -90,8 +90,21 @@ public extension WindRelation {
 /// inside a right-to-left paragraph. Two things go wrong there by default and
 /// both are handled here rather than in each view.
 public enum HebrewText {
-    /// U+200E LEFT-TO-RIGHT MARK.
-    public static let leftToRightMark = "\u{200E}"
+    /// U+2066 LEFT-TO-RIGHT ISOLATE, and U+2069 POP DIRECTIONAL ISOLATE.
+    ///
+    /// These replaced U+200E LEFT-TO-RIGHT MARK, which caused a real rendering
+    /// bug: LRM has bidi class **L**, a strong left-to-right character. The wave
+    /// line begins with its height, so the line began with an LRM — and rule P2
+    /// of the bidi algorithm takes the paragraph direction from the first strong
+    /// character it finds. The whole line therefore resolved as **left-to-right**
+    /// and rendered inside out, with the Hebrew at one end and the number
+    /// stranded at the other.
+    ///
+    /// Isolates fix it precisely, because P2 **skips over everything between an
+    /// isolate initiator and its matching PDI**. The Hebrew decides the line's
+    /// direction, and the number still renders left-to-right inside its island.
+    public static let leftToRightIsolate = "\u{2066}"
+    public static let popDirectionalIsolate = "\u{2069}"
 
     /// Hebrew geresh, U+05F3. Not an ASCII apostrophe — `מ׳` uses this, and the
     /// typography rule says so explicitly.
@@ -137,15 +150,19 @@ public enum HebrewText {
         ltr("\(start)-\(end)")
     }
 
-    /// Isolates a numeric run so the bidirectional algorithm cannot reorder it.
+    /// Isolates a numeric run so the bidirectional algorithm cannot reorder it,
+    /// and — just as important — so the run cannot change the direction of the
+    /// line it sits in.
     ///
-    /// Without this, a number carrying punctuation — a decimal point, a hyphen
-    /// in a time range, a middle dot separator — can be reordered against the
-    /// surrounding Hebrew and render as `9:00-06:00` or with the decimal in the
-    /// wrong place. The marks are invisible and cost nothing when the text is
-    /// laid out left-to-right.
+    /// Without isolation a number carrying punctuation (a decimal point, the
+    /// hyphen in a time range, a middle dot separator) gets reordered against
+    /// the surrounding Hebrew and renders as `9:00-06:00`, or with the number
+    /// thrown to the far end of the line away from its unit.
+    ///
+    /// The characters are invisible and cost nothing when the surrounding text
+    /// is already left-to-right.
     public static func ltr(_ text: String) -> String {
-        leftToRightMark + text + leftToRightMark
+        leftToRightIsolate + text + popDirectionalIsolate
     }
 
     /// The same value spelled out for VoiceOver.

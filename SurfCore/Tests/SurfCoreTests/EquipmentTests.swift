@@ -62,8 +62,8 @@ struct HeightUnitTests {
         #expect(imperial.waveHeightText.contains("3.3"))
         #expect(imperial.waveHeightText.contains("4.2"))
         #expect(imperial.accessibilityLabel.contains("4.2"))
-        // Spoken form drops the abbreviation and the direction marks.
-        #expect(!imperial.accessibilityLabel.contains(HebrewText.leftToRightMark))
+        // Spoken form drops the abbreviation and the direction controls.
+        #expect(!imperial.accessibilityLabel.contains(HebrewText.leftToRightIsolate))
     }
 
     @Test("Switching units never drops the slang half of the line")

@@ -41,14 +41,52 @@ struct PresentationTests {
 
     @Test("Numeric runs are isolated so RTL layout cannot reverse them")
     func numbersStayLeftToRight() {
-        // Without the marks, a decimal point or a hyphen can reorder against the
-        // surrounding Hebrew and render 06:00-09:00 as 9:00-06:00.
-        #expect(presentation.waveHeightText.hasPrefix(HebrewText.leftToRightMark))
-        #expect(presentation.scoreText?.contains(HebrewText.leftToRightMark) == true)
+        // Without isolation, a decimal point or a hyphen reorders against the
+        // surrounding Hebrew and renders 06:00-09:00 as 9:00-06:00.
+        #expect(presentation.waveHeightText.hasPrefix(HebrewText.leftToRightIsolate))
+        #expect(presentation.waveHeightText.contains(HebrewText.popDirectionalIsolate))
+        #expect(presentation.scoreText?.contains(HebrewText.leftToRightIsolate) == true)
 
         let range = HebrewText.timeRange("06:00", "09:00")
         #expect(range.contains("06:00-09:00"))
-        #expect(range.hasPrefix(HebrewText.leftToRightMark))
+        #expect(range.hasPrefix(HebrewText.leftToRightIsolate))
+    }
+
+    @Test("A number never sets the direction of the line it sits in")
+    func numbersDoNotFlipTheLine() {
+        // The bug this pins: LRM has bidi class L, so a line beginning with one
+        // resolved LEFT-to-right under rule P2 and rendered inside out - the
+        // Hebrew at one end, the height stranded at the other, away from its
+        // unit. Isolates are skipped by P2, so the Hebrew decides.
+        for line in [presentation.waveLine, presentation.windLine, presentation.waveHeightText] {
+            #expect(!line.contains("\u{200E}"), "LRM would re-flip the line: \(line)")
+            #expect(!line.contains("\u{200F}"))
+        }
+
+        // The first strong character outside any isolate must be Hebrew, which
+        // is what makes the paragraph resolve right-to-left.
+        #expect(firstStrongOutsideIsolates(presentation.waveLine) == .rightToLeft)
+    }
+
+    private enum Strength { case leftToRight, rightToLeft, none }
+
+    /// Mirrors bidi rule P2: scan for the first strong character, skipping
+    /// anything between an isolate initiator and its matching PDI.
+    private func firstStrongOutsideIsolates(_ text: String) -> Strength {
+        var depth = 0
+        for scalar in text.unicodeScalars {
+            switch scalar.value {
+            case 0x2066...0x2068: depth += 1
+            case 0x2069: depth = max(0, depth - 1)
+            default:
+                guard depth == 0 else { continue }
+                if (0x0590...0x08FF).contains(scalar.value) { return .rightToLeft }
+                if (0x0041...0x005A).contains(scalar.value)
+                    || (0x0061...0x007A).contains(scalar.value)
+                    || scalar.value == 0x200E { return .leftToRight }
+            }
+        }
+        return .none
     }
 
     @Test("VoiceOver gets one coherent sentence, not six fragments")
@@ -75,7 +113,9 @@ struct PresentationTests {
         // A screen reader announcing מ׳ reads a letter, not "metres", and a
         // direction mark is noise in the middle of a word.
         let label = presentation.accessibilityLabel
-        #expect(!label.contains(HebrewText.leftToRightMark))
+        #expect(!label.contains(HebrewText.leftToRightIsolate))
+        #expect(!label.contains(HebrewText.popDirectionalIsolate))
+        #expect(!label.contains("\u{200E}"))
         #expect(!label.contains(HebrewText.geresh))
         #expect(label.contains("מטר"))
     }
@@ -84,7 +124,9 @@ struct PresentationTests {
     func windCarriesDirectionAndRelation() {
         // The relation word outranks the arrow and the number in the layout:
         // "offshore" is the fact that changes behaviour.
-        #expect(presentation.windLine == "רוח מזרחית \u{200E}8\u{200E} קשר")
+        // Built from the helper rather than hardcoding the control characters,
+        // so changing how numbers are isolated cannot silently break this.
+        #expect(presentation.windLine == "רוח מזרחית \(HebrewText.ltr("8")) קשר")
         #expect(presentation.windDirection == .east)
         #expect(presentation.windStrength == .weak)
         #expect(presentation.windRelationHebrew == WindRelation.offshore.hebrew)
