@@ -1,0 +1,2 @@
+# XcodeGen writes the generated Info.plist here. The directory is committed so
+# generation cannot fail on a fresh CI checkout; the plist itself is ignored.

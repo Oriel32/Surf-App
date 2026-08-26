@@ -1,0 +1,77 @@
+# Builds an UNSIGNED .ipa on a GitHub-hosted macOS runner.
+#
+# Why this exists: the iOS SDK is Mac-only and closed-source, so an iPhone build
+# needs macOS somewhere. GitHub gives public repositories free, unlimited
+# macOS-runner minutes, which is the whole reason this is free.
+#
+# There are deliberately NO signing secrets here. The artifact is unsigned, and
+# SideStore signs it on-device with a free Apple ID. That means nothing in this
+# repo is a credential, and the workflow works on a fresh fork with no setup.
+name: iOS build
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain versions
+        run: |
+          xcodebuild -version
+          swift --version
+
+      # The hermetic suite, run again on Apple platforms. It already passes on
+      # Linux; this catches anything that only shows up against Apple's
+      # Foundation, and it gates the build so a red suite never ships an .ipa.
+      - name: Test SurfCore
+        run: swift test --package-path SurfCore
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # The .xcodeproj is generated, never committed - see project.yml.
+      - name: Generate the Xcode project
+        run: xcodegen generate
+
+      - name: Build (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Glassy.xcodeproj \
+            -scheme Glassy \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      # An .ipa is just a zip with the .app inside a Payload/ directory. Doing
+      # it by hand rather than through `xcodebuild -exportArchive`, because
+      # export insists on a signing identity and we deliberately have none.
+      - name: Package the .ipa
+        run: |
+          APP="build/Build/Products/Release-iphoneos/Glassy.app"
+          test -d "$APP" || { echo "No .app at $APP"; exit 1; }
+          mkdir -p Payload
+          cp -R "$APP" Payload/
+          zip -qry Glassy.ipa Payload
+          ls -lh Glassy.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Glassy-unsigned-ipa
+          path: Glassy.ipa
+          retention-days: 30
+          if-no-files-found: error

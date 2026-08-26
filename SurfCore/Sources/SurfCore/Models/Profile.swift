@@ -29,6 +29,22 @@ public enum SkillLevel: String, Sendable, Codable, Equatable, CaseIterable {
     case intermediate
     case advanced
 
+    public var hebrew: String {
+        switch self {
+        case .beginner: return "מתחיל"
+        case .intermediate: return "בינוני"
+        case .advanced: return "מנוסה"
+        }
+    }
+
+    public var english: String {
+        switch self {
+        case .beginner: return "Beginner"
+        case .intermediate: return "Intermediate"
+        case .advanced: return "Advanced"
+        }
+    }
+
     /// Offshore wind speed, in knots, at which this user gets warned.
     public var offshoreWarningThresholdKnots: Double {
         switch self {
