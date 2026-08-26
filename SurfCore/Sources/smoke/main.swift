@@ -213,6 +213,43 @@ case .fresh(let reading):
     let delta = c.openSeaHeightMeters - reading.significantWaveHeightMeters
     print("  model open-sea same hour: \(metres(c.openSeaHeightMeters))")
     print("  delta: \(String(format: "%+.2f m", delta))  \(abs(delta) < 0.3 ? "— models agree with reality" : "— MODEL AND BUOY DISAGREE")")
+    print("  period: model \(seconds(c.periodSeconds)) vs buoy \(seconds(reading.peakPeriodSeconds))"
+        + "  \(String(format: "%+.1f s", c.periodSeconds - reading.peakPeriodSeconds))")
+
+    // Keep the comparison instead of printing it and forgetting it. One run is
+    // an anecdote; the series is what can actually tune a coefficient.
+    let logURL = URL(fileURLWithPath: "calibration/observations.jsonl")
+    do {
+        try CalibrationLog.append(
+            CalibrationRecord(
+                recordedAt: now,
+                spotID: spot.id,
+                stationID: reading.stationID,
+                observedAt: reading.observedAt,
+                modelOpenSeaHeightMeters: c.openSeaHeightMeters,
+                modelPeriodSeconds: c.periodSeconds,
+                buoyHeightMeters: reading.significantWaveHeightMeters,
+                buoyPeakPeriodSeconds: reading.peakPeriodSeconds
+            ),
+            to: logURL
+        )
+        let history = try CalibrationLog.read(from: logURL)
+        let summary = CalibrationLog.summarise(history, spotID: spot.id)
+        print("  logged. \(summary.count) observation(s) for this spot so far")
+        if summary.count >= 2 {
+            print("    height bias \(String(format: "%+.2f m", summary.heightBiasMeters))"
+                + "  RMSE \(String(format: "%.2f m", summary.heightRMSEMeters)))")
+            print("    period bias \(String(format: "%+.1f s", summary.periodBiasSeconds))"
+                + "  RMSE \(String(format: "%.1f s", summary.periodRMSESeconds)))")
+        }
+        if summary.count < 30 {
+            print("    (need 30+ before the bias is worth tuning against)")
+        }
+    } catch {
+        // A logging failure must never fail the smoke run — the point of the
+        // run is the forecast, not the bookkeeping.
+        print("  (could not write calibration log: \(error))")
+    }
 
 case .stale(let reading, let age):
     print("  station \(reading.stationID): OFFLINE")
