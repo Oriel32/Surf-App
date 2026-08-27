@@ -87,9 +87,9 @@ struct TideDepthTests {
         // The cap is 0.78 x depth, so on a shallow bar even a small tide moves
         // the biggest wave the spot can hold.
         let spot = Spot.fixture(exposureCoefficient: 1.0, breakDepthMeters: 1.5)
-        let low = WaveTransform.transform(sample(seaLevel: -0.2), at: spot).waveHeightMeters
-        let mid = WaveTransform.transform(sample(seaLevel: 0), at: spot).waveHeightMeters
-        let high = WaveTransform.transform(sample(seaLevel: 0.2), at: spot).waveHeightMeters
+        let low = WaveTransform.transform(sample(seaLevel: -0.2), at: spot).breakingLimitMeters
+        let mid = WaveTransform.transform(sample(seaLevel: 0), at: spot).breakingLimitMeters
+        let high = WaveTransform.transform(sample(seaLevel: 0.2), at: spot).breakingLimitMeters
 
         #expect(low < mid)
         #expect(mid < high)
@@ -99,7 +99,7 @@ struct TideDepthTests {
     @Test("Missing sea level falls back to the nominal depth rather than failing")
     func missingTideIsNominal() {
         let spot = Spot.fixture(exposureCoefficient: 1.0, breakDepthMeters: 1.5)
-        let absent = WaveTransform.transform(sample(seaLevel: nil), at: spot).waveHeightMeters
+        let absent = WaveTransform.transform(sample(seaLevel: nil), at: spot).breakingLimitMeters
         #expect(abs(absent - 0.78 * 1.5) < 1e-6)
     }
 
@@ -108,6 +108,10 @@ struct TideDepthTests {
         let spot = Spot.fixture(exposureCoefficient: 1.0, breakDepthMeters: 1.5)
         let broken = WaveTransform.transform(sample(seaLevel: -99), at: spot)
         #expect(broken.waveHeightMeters > 0)
-        #expect(broken.waveHeightMeters <= 0.78 * 0.5)
+        #expect(broken.breakingLimitMeters <= 0.78 * 0.5)
+        // The bar can hold almost nothing at this depth, so the score sees
+        // almost nothing — even though the sea itself is still metres deep.
+        #expect(broken.rideableHeightMeters <= 0.78 * 0.5)
+        #expect(broken.isDepthLimited)
     }
 }

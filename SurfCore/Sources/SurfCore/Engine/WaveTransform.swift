@@ -110,6 +110,21 @@ public enum WaveTransform {
 
     /// Turns one hour of open-sea model output into what breaks at one spot.
     public static func transform(_ sample: RawMarineSample, at spot: Spot) -> SpotConditions {
+        explain(sample, at: spot).conditions
+    }
+
+    /// The same transformation, with every intermediate value it passed through.
+    ///
+    /// A forecast that disagrees with another app is not debuggable from its
+    /// final number alone: an offshore height, a shelter coefficient, a
+    /// refraction, a shoal, a breaking cap and a Rayleigh set factor all
+    /// multiply together, and any one of them can be the culprit. This is the
+    /// same code path `transform` takes — the trace is a by-product of the real
+    /// computation, never a re-derivation, so it cannot drift from what ships.
+    public static func explain(
+        _ sample: RawMarineSample,
+        at spot: Spot
+    ) -> (conditions: SpotConditions, trace: TransformTrace) {
         switch spot.basin {
         case .gulfOfEilat:
             return synthesiseGulfOfEilat(sample, at: spot)
@@ -118,13 +133,10 @@ public enum WaveTransform {
         }
     }
 
-    /// One transformed wave train at the break.
-    private struct BrokenTrain {
-        let heightMeters: Double
-        let periodSeconds: Double
-    }
-
-    private static func transformMediterranean(_ sample: RawMarineSample, at spot: Spot) -> SpotConditions {
+    private static func transformMediterranean(
+        _ sample: RawMarineSample,
+        at spot: Spot
+    ) -> (conditions: SpotConditions, trace: TransformTrace) {
         // The tide moves the bar the wave breaks on. The Mediterranean range is
         // only a few dozen centimetres, but the breaking cap is `0.78 x depth`,
         // so on a 1.5 m bar even 0.2 m of tide moves the ceiling by 10 percent -
@@ -138,27 +150,51 @@ public enum WaveTransform {
         // sea while taking the period and bearing from the swell partition -
         // which is what this did before - applies groundswell physics to a
         // height that wind chop inflated.
-        let trains = sample.partitions.map { transform($0, at: spot, depthMeters: depth) }
+        let trains = sample.partitions.map {
+            transform($0, at: spot, depthMeters: depth, label: sample.label(for: $0))
+        }
 
         // Independent trains add in ENERGY, so heights add in quadrature. Adding
         // them linearly would double-count a sea that is mostly one train.
         let combined = trains.reduce(0) { $0 + $1.heightMeters * $1.heightMeters }.squareRoot()
 
-        // The cap is depth-limited breaking, so it applies to the whole sea at
-        // the break, not to each train separately.
-        let height = min(combined, breakingHeightLimit(depthMeters: depth))
+        // Depth-limited breaking, computed for the whole sea at the break rather
+        // than per train — but *carried*, not applied to the reported height.
+        //
+        // Clipping here is what flattened the top of the week: two days with
+        // very different swells both came out at the ceiling and became
+        // indistinguishable. The constraint is real, so it travels with the
+        // conditions and the score enforces it; see `rideableHeightMeters`.
+        let limit = breakingHeightLimit(depthMeters: depth)
+        let height = combined
 
         // The period reported is the dominant train's, never a blend: averaging
         // a 9 s groundswell with a 3 s chop describes neither of them.
         let dominant = trains.max { $0.heightMeters < $1.heightMeters }
 
-        return assemble(
+        let conditions = assemble(
             sample: sample,
             spot: spot,
             heightMeters: height,
             periodSeconds: dominant?.periodSeconds ?? 0,
+            breakingLimitMeters: limit,
             isSynthetic: false
         )
+        let trace = TransformTrace(
+            spotID: spot.id,
+            isSynthetic: false,
+            nominalDepthMeters: spot.breakDepthMeters,
+            tideOffsetMeters: sample.seaLevelMeters,
+            depthMeters: depth,
+            trains: trains,
+            combinedMeters: combined,
+            breakingLimitMeters: limit,
+            significantMeters: height,
+            periodSeconds: conditions.periodSeconds,
+            dominantTrainLabel: dominant?.label,
+            band: conditions.band
+        )
+        return (conditions, trace)
     }
 
     /// Shelter, shoal and refract a single train. Returns zero height when the
@@ -166,17 +202,33 @@ public enum WaveTransform {
     private static func transform(
         _ train: SwellComponent,
         at spot: Spot,
-        depthMeters depth: Double
-    ) -> BrokenTrain {
+        depthMeters depth: Double,
+        label: TransformTrace.TrainLabel
+    ) -> TransformTrace.Train {
         // Peak period throughout: shoaling and refraction are both functions of
         // wavelength, and the wavelength that matters is the energetic one.
         let period = train.surfPeriodSeconds
+
+        var step = TransformTrace.Train(
+            label: label,
+            openSeaHeightMeters: train.heightMeters,
+            periodSeconds: period,
+            periodIsPeak: train.peakPeriodSeconds != nil,
+            meanPeriodSeconds: train.periodSeconds,
+            directionDegrees: train.directionDegrees,
+            incidentAngleDegrees: Compass.angularDistance(
+                train.directionDegrees,
+                spot.shorelineNormalDegrees
+            ),
+            exposureCoefficient: spot.exposureCoefficient
+        )
 
         // A sector the break simply cannot see - behind a mole or a headland -
         // is shadowed, not merely reduced. The exposure coefficient is a scalar
         // and cannot express "from that direction, nothing arrives".
         if let window = spot.swellWindow, !window.admits(train.directionDegrees) {
-            return BrokenTrain(heightMeters: 0, periodSeconds: period)
+            step.shadowing = .outsideSwellWindow
+            return step
         }
 
         // Sheltering first: breakwaters, headlands and piers block incident
@@ -184,43 +236,67 @@ public enum WaveTransform {
         // (The prose spec lists the coefficient last; applying it after the
         // breaking cap would reduce an already-capped height twice.)
         let incidentHeight = train.heightMeters * spot.exposureCoefficient
-
-        let incidentAngle = Compass.angularDistance(
-            train.directionDegrees,
-            spot.shorelineNormalDegrees
-        )
+        step.afterExposureMeters = incidentHeight
 
         guard let refraction = refractionCoefficient(
             periodSeconds: period,
             depthMeters: depth,
-            incidentAngleDegrees: incidentAngle
+            incidentAngleDegrees: step.incidentAngleDegrees
         ) else {
-            return BrokenTrain(heightMeters: 0, periodSeconds: period)
+            step.shadowing = .behindTheShoreline
+            return step
         }
+        step.refractionCoefficient = refraction
+        step.afterRefractionMeters = incidentHeight * refraction
 
         let shoaling = shoalingCoefficient(periodSeconds: period, depthMeters: depth)
-        return BrokenTrain(
-            heightMeters: incidentHeight * shoaling * refraction,
-            periodSeconds: period
-        )
+        step.shoalingCoefficient = shoaling
+        step.heightMeters = incidentHeight * refraction * shoaling
+        return step
     }
 
     /// The Gulf of Eilat receives no swell — it is a closed, narrow basin that
     /// global wave models do not resolve, so their output there is noise. Wave
     /// height is derived directly from the local wind instead, and the UI must
     /// label the result as locally derived rather than modelled.
-    private static func synthesiseGulfOfEilat(_ sample: RawMarineSample, at spot: Spot) -> SpotConditions {
+    private static func synthesiseGulfOfEilat(
+        _ sample: RawMarineSample,
+        at spot: Spot
+    ) -> (conditions: SpotConditions, trace: TransformTrace) {
         let windKnots = Units.knots(fromMetersPerSecond: sample.windSpeedMPS)
         let height = windKnots * 0.04
         let period = 3 + 0.15 * windKnots
 
-        return assemble(
+        // Note the asymmetry with the Mediterranean path, which is deliberate
+        // only inasmuch as nobody has decided otherwise: the cap here uses the
+        // nominal depth with no sea-level correction.
+        let limit = breakingHeightLimit(depthMeters: spot.breakDepthMeters)
+        let conditions = assemble(
             sample: sample,
             spot: spot,
-            heightMeters: min(height, breakingHeightLimit(depthMeters: spot.breakDepthMeters)),
+            heightMeters: min(height, limit),
             periodSeconds: period,
+            // The gulf's synthetic wind chop is already capped above, and it
+            // models no sandbar to be limited by, so the score has nothing
+            // further to enforce here.
+            breakingLimitMeters: 0,
             isSynthetic: true
         )
+        let trace = TransformTrace(
+            spotID: spot.id,
+            isSynthetic: true,
+            nominalDepthMeters: spot.breakDepthMeters,
+            tideOffsetMeters: nil,
+            depthMeters: spot.breakDepthMeters,
+            trains: [],
+            combinedMeters: height,
+            breakingLimitMeters: limit,
+            significantMeters: conditions.waveHeightMeters,
+            periodSeconds: period,
+            dominantTrainLabel: nil,
+            band: conditions.band
+        )
+        return (conditions, trace)
     }
 
     private static func assemble(
@@ -228,32 +304,40 @@ public enum WaveTransform {
         spot: Spot,
         heightMeters: Double,
         periodSeconds: Double,
+        breakingLimitMeters: Double,
         isSynthetic: Bool
     ) -> SpotConditions {
         let relation = Compass.windRelation(
             windFromDegrees: sample.windDirectionDegrees,
             shorelineNormalDegrees: spot.shorelineNormalDegrees
         )
+        // Texture first: below the break point it decides whether the sea reads
+        // as `ים נוח` or `ים גלי`, so the band cannot be chosen without it.
+        let seaState = SeaStateClassifier.classify(
+            heightMeters: heightMeters,
+            windSpeedMPS: sample.windSpeedMPS,
+            relation: relation
+        )
+
         return SpotConditions(
             timestamp: sample.timestamp,
             spotID: spot.id,
             waveHeightMeters: heightMeters,
             periodSeconds: periodSeconds,
-            // Chosen from the sets rather than the significant height: nobody
-            // names a beach day after its statistical mean. See SurfRange.
+            // Chosen from the significant height — the low end of the range the
+            // app displays — so the word and the number agree. See SurfRange.
             band: WaveBand.band(
-                forHeightMeters: SurfRange(significantMeters: heightMeters).bandDefiningMeters
+                forHeightMeters: SurfRange(significantMeters: heightMeters).bandDefiningMeters,
+                periodSeconds: periodSeconds,
+                seaState: seaState
             ),
-            seaState: SeaStateClassifier.classify(
-                heightMeters: heightMeters,
-                windSpeedMPS: sample.windSpeedMPS,
-                relation: relation
-            ),
+            seaState: seaState,
             windSpeedMPS: sample.windSpeedMPS,
             windDirectionDegrees: sample.windDirectionDegrees,
             windRelation: relation,
             openSeaHeightMeters: sample.waveHeightMeters,
             isSynthetic: isSynthetic,
+            breakingLimitMeters: breakingLimitMeters,
             windGustMPS: sample.windGustMPS,
             isDaylight: sample.isDaylight,
             seaSurfaceTemperatureC: sample.seaSurfaceTemperatureC,

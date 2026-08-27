@@ -4,36 +4,72 @@ import Testing
 
 @Suite("Wave height to local slang")
 struct WaveBandTests {
+    /// A long period, so every height in these cases clears the break point and
+    /// the anatomical ladder is what is being tested.
+    private func band(_ meters: Double, period: Double = 9, seaState: SeaState = .fair) -> WaveBand {
+        WaveBand.band(forHeightMeters: meters, periodSeconds: period, seaState: seaState)
+    }
+
     @Test("Named heights land in the band the community uses")
     func canonicalHeights() {
-        #expect(WaveBand.band(forHeightMeters: 0.30) == .ankleToKnee)
-        #expect(WaveBand.band(forHeightMeters: 0.80) == .waistToChest)
-        #expect(WaveBand.band(forHeightMeters: 1.20) == .shoulderToHead)
-        #expect(WaveBand.band(forHeightMeters: 3.00) == .doubleOverhead)
+        #expect(band(0.55) == .ankle)
+        #expect(band(0.80) == .knee)
+        #expect(band(1.00) == .waist)
+        #expect(band(1.30) == .chest)
+        #expect(band(1.50) == .shoulder)
+        #expect(band(1.90) == .head)
+        #expect(band(3.00) == .doubleHead)
+    }
+
+    @Test("GoSurf's own words for Bat Yam, 2026-08-27")
+    func matchesGoSurfOnTheDayItWasMeasured() {
+        // The two hours the ledger records side by side. These are not chosen
+        // boundaries — they are the heights the pipeline produced that day, and
+        // the words GoSurf published for the same hours.
+        // See calibration/bat-yam-comparison.md.
+        #expect(band(0.48, period: 6.3, seaState: .fair).hebrew == "ים גלי")
+        #expect(band(0.51, period: 6.3, seaState: .fair).hebrew == "קרסול")
     }
 
     @Test("A dead flat sea is flat, not ankle-high")
     func flatIsFlat() {
-        #expect(WaveBand.band(forHeightMeters: 0.0) == .flat)
-        #expect(WaveBand.band(forHeightMeters: 0.15) == .flat)
+        #expect(band(0.0) == .flat)
+        #expect(band(0.05) == .flat)
     }
 
-    @Test("The gaps the research leaves between bands are closed")
-    func noGapsBetweenBands() {
-        // The source doc names 0.20-0.40, 0.50-0.90 and 1.00-1.50, leaving 0.40-0.50
-        // and 0.90-1.00 unnamed. A band table with holes drops real conditions
-        // on the floor, so these must resolve to the band below.
-        #expect(WaveBand.band(forHeightMeters: 0.45) == .ankleToKnee)
-        #expect(WaveBand.band(forHeightMeters: 0.95) == .waistToChest)
+    @Test("Below the break point there is a sea state, never a body part")
+    func belowBreakingIsNotAnatomical() {
+        // GoSurf: "גלים נשברים מ-50 ס״מ" — naming a body part for water that
+        // does not break is the overstatement this whole calibration was about.
+        #expect(band(0.30, period: 6).isBreakingSurf == false)
+        #expect(band(0.45, period: 6) == .wavySea)
+
+        // `ים נוח` is the swimmer's sea: small AND smooth. Glass alone does not
+        // earn it — GoSurf called a 0.46 m sea `ים גלי` in a 4 km/h wind.
+        #expect(band(0.45, period: 6, seaState: .glassy) == .wavySea)
+        #expect(band(0.20, period: 6, seaState: .glassy) == .calmSea)
+        #expect(band(0.20, period: 6, seaState: .choppy) == .wavySea)
+    }
+
+    @Test("The break point moves with the period, as GoSurf says it does")
+    func breakPointFollowsPeriod() {
+        // A short-period slop needs more height to break; a groundswell needs less.
+        #expect(band(0.50, period: 4) == .wavySea)
+        #expect(band(0.50, period: 6) == .ankle)
+        #expect(band(0.45, period: 10) == .ankle)
+
+        #expect(abs(SurfBreaking.minimumHeightMeters(periodSeconds: 6) - 0.50) < 0.01)
+        #expect(SurfBreaking.minimumHeightMeters(periodSeconds: 4) > 0.60)
+        #expect(SurfBreaking.minimumHeightMeters(periodSeconds: 12) < 0.36)
     }
 
     @Test("Bands never go backwards as height rises")
     func bandsAreMonotonic() {
         var previous = WaveBand.flat
         for step in 0...400 {
-            let band = WaveBand.band(forHeightMeters: Double(step) / 100)
-            #expect(band.lowerBoundMeters >= previous.lowerBoundMeters)
-            previous = band
+            let current = band(Double(step) / 100)
+            #expect(current.lowerBoundMeters >= previous.lowerBoundMeters)
+            previous = current
         }
     }
 

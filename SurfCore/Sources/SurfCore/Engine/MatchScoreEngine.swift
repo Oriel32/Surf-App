@@ -49,12 +49,18 @@ public enum MatchScoreEngine {
         // Energy says how hard the wave will push. It is height and period
         // combined the way the physics combines them, H^2 T - which is what
         // every forecast a user might cross-check against leads with.
-        let energy = tuning.energy.value(c.energyKilowattsPerMetre)
+        let energy = tuning.energy.value(c.rideableEnergyKilowattsPerMetre)
 
         // Size is a different question from power: whether the thing is
         // rideable at all. It gates rather than adds, so a 0.2 m sea cannot
         // score on a long period and a 4 m sea cannot score on raw power.
-        let size = tuning.height.value(c.waveHeightMeters)
+        //
+        // The *rideable* height, not the reported one: this is where the
+        // depth-limited breaking constraint is enforced now that the displayed
+        // height no longer carries it. A 2 m sea over a bar that can hold 1.6 m
+        // is 2 m of water and a closeout, and this is the layer being asked
+        // whether it is worth surfing.
+        let size = tuning.height.value(c.rideableHeightMeters)
 
         // Period enters twice, and not by accident. Inside `energy` it is
         // POWER: how much water the wave is moving. Here it is SHAPE: whether
@@ -96,7 +102,7 @@ public enum MatchScoreEngine {
     ) -> (Double, [String: Double]) {
         let wind = tuning.wind.value(c.windSpeedKnots)
         let direction = tuning.direction[c.windRelation]
-        let height = tuning.height.value(c.waveHeightMeters)
+        let height = tuning.height.value(c.rideableHeightMeters)
 
         // No wind means no session, whatever else is true.
         let value = wind
@@ -109,7 +115,7 @@ public enum MatchScoreEngine {
 
     private static func standUpPaddle(_ c: SpotConditions) -> (Double, [String: Double]) {
         let tuning = ScoreTuning.sup
-        let flatness = tuning.flatness.value(c.waveHeightMeters)
+        let flatness = tuning.flatness.value(c.rideableHeightMeters)
         let wind = tuning.wind.value(c.windSpeedKnots)
 
         let value = flatness * (tuning.windFloor + (1 - tuning.windFloor) * wind)

@@ -62,16 +62,52 @@ series.
 Extracted from `surf_research.md`. These are product requirements, not suggestions. All bands are table-driven and unit-tested.
 
 ## Wave height -> local slang
-Displayed as metric value **and** anatomical term together, never one alone.
+Displayed as metric value **and** term together, never one alone.
+
+**This table is calibrated against GoSurf, not taken from `surf_research.md`.**
+The research doc's four paired bands were measured against the local market
+leader on 2026-08-27 at Bat Yam and found two to three bands too generous: it
+named a 0.48 m sea `מותן עד חזה` where GoSurf called the same hour `ים גלי`.
+Since GoSurf's swell column agrees with our model input and with the ISRAMAR
+buoy to within 12 cm, the disagreement was the vocabulary, not the physics.
+Evidence and the full side-by-side: `calibration/bat-yam-comparison.md`.
+
+Seven single terms, not paired ranges, and they begin only where waves break:
 
 | Adjusted height at spot | Hebrew | English | Audience |
 |---|---|---|---|
-| 0.20-0.40 m | קרסול עד ברך | Ankle to knee | Beginners, SUP |
-| 0.50-0.90 m | מותן עד חזה | Waist to chest | The golden range - core audience |
-| 1.00-1.50 m | כתף עד ראש | Shoulder to head | Experienced only |
-| >1.50 m (storm) | פעמיים ראש ומעלה | Double overhead+ | Professionals |
+| < 0.10 m | פלטה | Flat | Nobody |
+| 0.10 m - break point | ים נוח / ים גלי | Calm sea / Wavy sea | Swimmers, not surfers |
+| break point - 0.70 m | קרסול | Ankle | Beginners, SUP |
+| 0.70-0.95 m | ברך | Knee | Beginners |
+| 0.95-1.20 m | מותן | Waist | The golden range - core audience |
+| 1.20-1.45 m | חזה | Chest | Core audience |
+| 1.45-1.70 m | כתף | Shoulder | Experienced |
+| 1.70-2.20 m | ראש | Head | Experienced only |
+| > 2.20 m | פעמיים ראש | Double head | Professionals |
 
-> Open spec question: the research jumps from "up to 1.5 m" straight to "double overhead", leaving 1.5-2.5 m unnamed. Working default is an intermediate `overhead / ראש` band at 1.5-2.2 m with `double overhead` above it. Confirm with a local surfer before shipping.
+`ים נוח` vs `ים גלי` is texture, not height: glassy or flat reads `ים נוח`,
+anything else reads `ים גלי`. It never affects which anatomical term is chosen.
+
+### The break point
+> גלים נשברים מ-50 ס״מ עם תלות במחזור הגל — GoSurf
+
+Below it there is no wave to name a body part after, and naming one is the
+overstatement that started this. Both halves of their sentence are load-bearing:
+0.6 m of 4-second slop has nothing to catch, and a 0.4 m 12-second groundswell
+stands up and peels. So the threshold is keyed to **energy**, not height:
+
+```
+surf exists when  0.5 * H^2 * T  >=  0.75 kW/m
+```
+
+anchored so 0.50 m at 6 s — this coast's measured median period — is exactly the
+break point. That gives 0.61 m at 4 s, 0.43 m at 8 s, 0.35 m at 12 s.
+Lives in `SurfBreaking`, and reuses the same `0.5 H^2 T` the score already uses.
+
+**Never express a safety threshold as a `WaveBand` case.** This table is product
+vocabulary and gets re-cut when the vocabulary is wrong; a re-cut must not be
+able to move when somebody is warned. See `SkillLevel.largeSurfWarningThresholdMeters`.
 
 ## Sea state -> texture
 | State | Hebrew | Condition | Colour |
@@ -95,7 +131,7 @@ Multiplier applied to open-sea significant wave height. Data-driven per spot:
 |---|---|---|
 | Fully exposed | Palmachim, HaTzuk | 0.90 |
 | Typical urban | Tel Aviv, Netanya | 0.85 |
-| Structure-protected | Ashdod (breakwaters) | 0.72 |
+| Structure-protected | Ashdod, Bat Yam (breakwaters) | 0.72 |
 | Ruin / pier-protected | Caesarea (Roman piers) | 0.70 |
 | Enclosed bay | Haifa Bay | 0.50 |
 
@@ -167,19 +203,14 @@ Every bug it finds should leave a hermetic regression test behind; all three abo
 **Concurrency settings.** `SurfCore` is a library and deliberately does *not* set `defaultIsolation(MainActor.self)` — libraries expose a nonisolated API and let the client decide what to offload. The **app target** is where "Approachable Concurrency" and "Default Actor Isolation = MainActor" belong.
 
 # UI Architecture: Dual-Layer
-Always adhere to the dual-layer interface paradigm for all SwiftUI views:
-- **Layer 1 (Glanceable):** Top-level views must prioritize immediate readability. Show only critical data (current wave height, primary swell direction, wind speed). Use clear, high-contrast typography compliant with Apple's HIG.
-- **Layer 2 (Analytical):** Detail views are for deep technical metrics. Display complex oceanographic data, wave energy metrics, and detailed time-series charts here.
 
 Per the research, the split is a decision-making split, not a data-volume split. Layer 1 answers "do I get in the car?" in under three seconds: Match Score, wave height plus slang, sea state, wind arrow plus knots, weather icon, and any safety alert. Layer 2 answers "is this model right?": swell period, raw open-sea swell, live buoy readings, webcams, water and air temperature, tide, and model confidence.
 
 # Backend & Data Handling
 - **Wave Transformation Logic:** The app relies on custom algorithms to calculate wave transformation from deep water to localized shallow breaks. Do not substitute generic weather formulas.
-- **API Integration:** Data is ingested from local oceanographic data APIs. Use modern Swift `async/await` concurrency for all network calls.
 - **State Management:** Keep API fetching logic decoupled from the UI. Use `@Observable` (Swift 6) and inject dependencies to allow for easy mocking of local wave conditions during testing.
 
 # Code Style Guidelines
-- **Language:** Swift 6.
 - **Framework:** SwiftUI strictly for the frontend. Do not use UIKit unless bridging a necessary component not available in SwiftUI.
 - **Simplicity:** Prefer the smallest, most direct solution. Avoid over-engineering state wrappers or unnecessary protocol abstractions.
 - **Localization:** Ensure all user-facing text is localized using String Catalogs, keeping the primary local demographic in mind. Hebrew is the primary locale - the slang terms above are the actual product vocabulary, not decoration. Design and test **RTL layout from the first view**, not as a retrofit. Wind arrows and directional glyphs must not mirror under RTL.

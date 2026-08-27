@@ -44,12 +44,20 @@ public struct SurfRange: Sendable, Equatable {
 
     /// The height the slang band is chosen from.
     ///
-    /// **Open question, same status as the `overhead` band and the score
-    /// boundaries.** Keyed to the sets on the reasoning that "waist to chest"
-    /// describes the wave a surfer stood next to, and nobody names a beach day
-    /// after its statistical mean. Confirm with a local surfer; changing it is
-    /// one line.
+    /// Keyed to the **significant height**, which is the low end of the range
+    /// the app displays, so the word and the number a user reads on one line
+    /// describe the same wave.
+    ///
+    /// This was previously keyed to the sets, on the reasoning that nobody names
+    /// a beach day after its statistical mean. That reasoning is sound and it
+    /// still produced a contradiction on screen: `0.48 m` printed beside
+    /// `מותן עד חזה`, because the band had been chosen from 0.61 m. Measured
+    /// against GoSurf on 2026-08-27 at Bat Yam — same sea, same hour — they
+    /// called it `קרסול` and we called it waist-to-chest, two bands apart.
+    /// See `calibration/bat-yam-comparison.md`.
+    ///
+    /// The sets did not disappear: they are the top of the displayed range.
     public var bandDefiningMeters: Double {
-        setMeters
+        significantMeters
     }
 }

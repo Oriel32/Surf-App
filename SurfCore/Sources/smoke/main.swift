@@ -11,12 +11,24 @@ import FoundationNetworking
 // The unit suite proves the logic is self-consistent. This proves the decoders
 // match what the providers actually send, which no fixture can.
 //
-//   swift run smoke [spot-id] [surfing|kitesurfing|wingFoil|sup] [beginner|intermediate|advanced]
+//   swift run smoke [spot-id] [surfing|kitesurfing|wingFoil|sup] [beginner|intermediate|advanced] [--explain]
+//
+// --explain prints every intermediate value of the wave transformation, which is
+// what makes a disagreement with another forecast app diagnosable rather than
+// just annoying.
 
 let arguments = CommandLine.arguments
-let spotID = arguments.count > 1 ? arguments[1] : "hadera"
-let sport = Sport(rawValue: arguments.count > 2 ? arguments[2] : "surfing") ?? .surfing
-let skill = SkillLevel(rawValue: arguments.count > 3 ? arguments[3] : "intermediate") ?? .intermediate
+let explain = arguments.contains("--explain")
+let todayTable = arguments.contains("--today")
+let positionalArgs = Array(arguments.dropFirst().filter { !$0.hasPrefix("--") })
+
+func positional(_ index: Int, default fallback: String) -> String {
+    index < positionalArgs.count ? positionalArgs[index] : fallback
+}
+
+let spotID = positional(0, default: "hadera")
+let sport = Sport(rawValue: positional(1, default: "surfing")) ?? .surfing
+let skill = SkillLevel(rawValue: positional(2, default: "intermediate")) ?? .intermediate
 let profile = UserProfile(sport: sport, skill: skill)
 
 // MARK: - Formatting
@@ -40,6 +52,13 @@ func hhmm(_ date: Date) -> String {
 func metres(_ value: Double) -> String { String(format: "%.2f m", value) }
 func seconds(_ value: Double) -> String { String(format: "%.1f s", value) }
 func knots(_ value: Double) -> String { String(format: "%.0f kt", value) }
+func kmh(_ knotsValue: Double) -> String { String(format: "%.0f km/h", knotsValue * 1.852) }
+
+// Foundation on Linux ignores the width in `%-10@`, so padding is done here
+// rather than in a format string.
+func pad(_ text: String, _ width: Int) -> String {
+    text.count >= width ? text + " " : text + String(repeating: " ", count: width - text.count)
+}
 
 func rule(_ title: String) {
     print("\n\u{001B}[1m\(title)\u{001B}[0m")
@@ -144,8 +163,15 @@ let current = forecast.hours.min {
 let c = current.conditions
 
 rule("RIGHT NOW  (\(clock(c.timestamp)))")
+// What the user actually reads, straight from the translation layer rather than
+// re-formatted here. Printing a raw metre value instead was hiding the fact that
+// the product already quotes a range.
+print("  AS SHOWN         : \(Translator.present(current).waveLine)")
 print("  Open sea (model) : \(metres(c.openSeaHeightMeters))")
 print("  At the beach     : \(metres(c.waveHeightMeters))   \(c.band.hebrew)  /  \(c.band.english)")
+if c.isDepthLimited {
+    print("  Depth-limited    : bar holds \(metres(c.breakingLimitMeters)); score sees \(metres(c.rideableHeightMeters))")
+}
 print("  Period           : \(seconds(c.periodSeconds))")
 print("  Sea state        : \(c.seaState.hebrew)  /  \(c.seaState.english)")
 print("  Wind             : \(knots(c.windSpeedKnots)) \(c.windRelation.rawValue) (from \(Int(c.windDirectionDegrees))°)")
@@ -155,6 +181,49 @@ if c.isSynthetic {
     print("  NOTE             : locally derived from wind, not modelled (Gulf of Eilat)")
 } else if c.openSeaHeightMeters > 0.01 {
     print("  Transform factor : ×\(String(format: "%.2f", c.waveHeightMeters / c.openSeaHeightMeters))")
+}
+
+// MARK: - Explain
+
+if explain {
+    rule("TRANSFORMATION — every step  (\(clock(c.timestamp)))")
+
+    // The repository hands back transformed conditions and keeps no raw sample,
+    // so the raw hour is refetched here rather than widening SpotForecast for a
+    // diagnostic. The height printed below is then checked against the one the
+    // repository produced — if the two disagree, this trace is describing a
+    // different computation than the one that ships, and is worthless.
+    do {
+        let samples = try await OpenMeteoClient().forecast(for: spot)
+        guard let raw = samples.min(by: {
+            abs($0.timestamp.timeIntervalSince(c.timestamp)) < abs($1.timestamp.timeIntervalSince(c.timestamp))
+        }) else {
+            print("  no raw sample to explain")
+            exit(1)
+        }
+
+        print("  OPEN SEA (model) \(metres(raw.waveHeightMeters))"
+            + "  \(seconds(raw.wavePeriodSeconds))  from \(Int(raw.waveDirectionDegrees))°")
+        print("  spot faces \(Int(spot.shorelineNormalDegrees))° · exposure \(spot.exposureCoefficient)")
+        print("")
+
+        let (replayed, trace) = WaveTransform.explain(raw, at: spot)
+        for line in trace.report() { print("  \(line)") }
+
+        if let net = trace.netFactor(openSeaHeightMeters: raw.waveHeightMeters) {
+            print("  NET        ×\(String(format: "%.3f", net)) on the open-sea height")
+        }
+
+        if abs(replayed.waveHeightMeters - c.waveHeightMeters) > 0.005 {
+            print("\n  ⚠ TRACE DISAGREES WITH THE PIPELINE:"
+                + " trace \(metres(replayed.waveHeightMeters))"
+                + " vs forecast \(metres(c.waveHeightMeters)).")
+            print("    Most likely the refetched hour is a different model run, not a bug in")
+            print("    the trace — rerun and check the timestamps before trusting either.")
+        }
+    } catch {
+        print("  could not refetch the raw hour to explain it: \(error)")
+    }
 }
 
 rule("MATCH SCORE")
@@ -181,6 +250,31 @@ if let window = forecast.bestWindowToday {
     print("  nothing today clears the bar — don't bother driving out")
 }
 
+// MARK: - Today, hour by hour
+
+// Every other forecast app publishes a three-hourly table for today. Ours was
+// only ever printable one hour at a time, which made "your numbers disagree with
+// theirs" impossible to check systematically. This prints the same shape of
+// table so the two can be read side by side.
+if todayTable {
+    rule("TODAY, HOUR BY HOUR")
+    print("  time   open-sea   beach     set ×\(String(format: "%.2f", WaveStatistics.oneInTen))  period   wind              sea state  band")
+
+    let calendar = Calendar.israelStandard
+    for hour in forecast.hours where calendar.isDate(hour.conditions.timestamp, inSameDayAs: now) {
+        let h = hour.conditions
+        let set = SurfRange(significantMeters: h.waveHeightMeters).setMeters
+        print("  " + pad(hhmm(h.timestamp), 7)
+            + pad(metres(h.openSeaHeightMeters), 11)
+            + pad(metres(h.waveHeightMeters), 10)
+            + pad(metres(set), 10)
+            + pad(seconds(h.periodSeconds), 9)
+            + pad("\(kmh(h.windSpeedKnots)) \(h.windRelation.rawValue)", 18)
+            + pad(h.seaState.english, 11)
+            + h.band.english)
+    }
+}
+
 rule("NEXT 7 DAYS")
 let calendar = Calendar.israelStandard
 for day in WindowFinder.dailyWindows(in: forecast.hours) {
@@ -193,9 +287,18 @@ for day in WindowFinder.dailyWindows(in: forecast.hours) {
     guard let peak = dayHours.max(by: { $0.score.value < $1.score.value }) else { continue }
     let p = peak.conditions
 
-    print("  \(label) peak \(String(format: "%3d", day.peakScore))  \(String(format: "%-13@", window as NSString))"
+    // The day's biggest hour, separately from its best-scoring hour. Another
+    // app's week graph plots the day's maximum, and comparing that against our
+    // best-*scoring* hour compares two different questions. Carrying the
+    // open-sea maximum beside it is what separates "our model input differs
+    // from theirs" from "our transform is wrong" — the two need opposite fixes.
+    let maxBeach = dayHours.map(\.conditions.waveHeightMeters).max() ?? 0
+    let maxOpenSea = dayHours.map(\.conditions.openSeaHeightMeters).max() ?? 0
+
+    print("  \(label) peak \(String(format: "%3d", day.peakScore))  \(pad(window, 13))"
         + " \(metres(p.waveHeightMeters))  \(seconds(p.periodSeconds))"
-        + "  \(knots(p.windSpeedKnots)) \(p.windRelation.rawValue)  \(p.seaState.english)  \(p.band.english)"
+        + "  \(pad("\(knots(p.windSpeedKnots)) \(p.windRelation.rawValue)", 18))\(pad(p.seaState.english, 8))\(pad(p.band.english, 16))"
+        + "max \(metres(maxOpenSea))→\(metres(maxBeach))"
         + (peak.alerts.isEmpty ? "" : "  ALERT:\(peak.alerts.map(\.severity.rawValue).joined(separator: ","))"))
 }
 

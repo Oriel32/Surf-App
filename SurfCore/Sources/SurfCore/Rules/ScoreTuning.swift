@@ -107,18 +107,23 @@ enum ScoreTuning {
         /// needs this curve moved.
         /// Calibrated against two fixed points rather than guessed.
         ///
-        /// **The top, 3.2 kW/m**, is 0.9 m at 8 s — the middle of the research's
-        /// golden range and the day the test suite already encodes as "scores
-        /// near the top". At the old plateau of 1.25 a 0.6 m, 7.7 s, 7-knot
-        /// sideshore morning also scored 100, and a pleasant small morning is
-        /// not a hundred-out-of-hundred day. That was the saturation behind the
-        /// run of 99s.
+        /// **The top, 2.4 kW/m**, is 0.9 m at 6.3 s — a genuinely good local day
+        /// at the period this coast actually runs. It was 3.2, which is the same
+        /// 0.9 m at *8 s*: a period the Mediterranean almost never sees, so a
+        /// good day here could never reach full energy credit and a clean 1 m
+        /// morning capped out around 85% of the term.
+        ///
+        /// Lowering it further is the trap. At the old plateau of 1.25 a 0.6 m,
+        /// 7.7 s, 7-knot sideshore morning scored 100, and a pleasant small
+        /// morning is not a hundred-out-of-hundred day — that saturation was the
+        /// run of 99s. At 2.4 the same morning carries 1.26 kW/m and reaches
+        /// about half the term, which is what it deserves.
         ///
         /// **The rise, 0.15**, removes a cliff: at 0.4 a genuinely flat day
         /// (0.26-0.34 m at 5 s, measured) scored a flat zero every hour, which
         /// reads as broken data rather than a small sea and draws an empty bar
         /// on the week chart.
-        let energy = Trapezoid(riseStart: 0.15, plateauStart: 3.2, plateauEnd: 12.0, fallEnd: 45.0)
+        let energy = Trapezoid(riseStart: 0.15, plateauStart: 2.4, plateauEnd: 12.0, fallEnd: 45.0)
 
         /// How ragged the wind is — gust divided by mean, not gust in knots.
         ///

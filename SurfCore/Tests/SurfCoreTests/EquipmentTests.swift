@@ -72,7 +72,7 @@ struct HeightUnitTests {
         let conditions = SpotConditions.fixture(waveHeightMeters: 0.8)
         for unit in HeightUnit.allCases {
             let presented = Translator.present(conditions, heightUnit: unit)
-            #expect(presented.waveLine.contains(WaveBand.waistToChest.hebrew))
+            #expect(presented.waveLine.contains(WaveBand.knee.hebrew))
             #expect(presented.waveLine.contains(presented.waveHeightText))
         }
     }

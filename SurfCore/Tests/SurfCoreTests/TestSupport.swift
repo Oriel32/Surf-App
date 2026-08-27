@@ -104,7 +104,11 @@ extension SpotConditions {
             spotID: "test-spot",
             waveHeightMeters: waveHeightMeters,
             periodSeconds: periodSeconds,
-            band: WaveBand.band(forHeightMeters: waveHeightMeters),
+            band: WaveBand.band(
+                forHeightMeters: waveHeightMeters,
+                periodSeconds: periodSeconds,
+                seaState: seaState
+            ),
             seaState: seaState,
             windSpeedMPS: windSpeedMPS,
             windDirectionDegrees: 90,

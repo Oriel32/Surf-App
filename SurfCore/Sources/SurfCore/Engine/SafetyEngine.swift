@@ -60,16 +60,16 @@ public enum SafetyEngine {
         profile: UserProfile
     ) -> SafetyAlert? {
         let band = conditions.band
-        let threshold: WaveBand
-        switch profile.skill {
-        case .beginner: threshold = .shoulderToHead
-        case .intermediate: threshold = .overhead
-        case .advanced: threshold = .doubleOverhead
+
+        // Compared in metres, against the measured height, rather than by
+        // comparing band cases: the band table is product vocabulary and gets
+        // re-cut when the vocabulary is wrong, and that must not be able to
+        // move a safety trigger. See SkillLevel.largeSurfWarningThresholdMeters.
+        guard conditions.waveHeightMeters >= profile.skill.largeSurfWarningThresholdMeters else {
+            return nil
         }
 
-        guard band.lowerBoundMeters >= threshold.lowerBoundMeters else { return nil }
-
-        let severity: AlertSeverity = band == .doubleOverhead ? .danger : .caution
+        let severity: AlertSeverity = band == .doubleHead ? .danger : .caution
         return SafetyAlert(
             kind: .largeSurf,
             severity: severity,

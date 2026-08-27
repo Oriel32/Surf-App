@@ -53,6 +53,25 @@ public enum SkillLevel: String, Sendable, Codable, Equatable, CaseIterable {
         case .advanced: return 14
         }
     }
+
+    /// Breaking height, in metres, at which this user gets a large-surf warning.
+    ///
+    /// **Stated in metres on purpose.** This used to be expressed as a
+    /// `WaveBand` case, which meant re-cutting the band table silently moved
+    /// three safety triggers with it. A vocabulary change must never be able to
+    /// decide when somebody is warned about the size of the sea.
+    ///
+    /// The values match the bands they replaced to within 5 cm, and every one
+    /// warns at or slightly *before* the height that used to trigger it:
+    /// beginner 1.00 → 0.95 (`מותן`), intermediate 1.50 → 1.45 (`כתף`),
+    /// advanced 2.20 → 2.20 (`פעמיים ראש`).
+    public var largeSurfWarningThresholdMeters: Double {
+        switch self {
+        case .beginner: return 0.95
+        case .intermediate: return 1.45
+        case .advanced: return 2.20
+        }
+    }
 }
 
 public struct UserProfile: Sendable, Codable, Equatable {

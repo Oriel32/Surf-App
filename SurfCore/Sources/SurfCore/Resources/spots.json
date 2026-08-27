@@ -90,7 +90,7 @@
     "latitude": 32.0171,
     "longitude": 34.7403,
     "basin": "mediterranean",
-    "exposureCoefficient": 0.85,
+    "exposureCoefficient": 0.72,
     "shorelineNormalDegrees": 270,
     "breakDepthMeters": 2.0,
     "buoyStationID": "hadera"

@@ -23,9 +23,9 @@ struct PresentationTests {
         // that kills trust; shipping the slang alone throws away the precision.
         let line = presentation.waveLine
         #expect(line.contains("0.8"))
-        #expect(line.contains(WaveBand.waistToChest.hebrew))
-        #expect(presentation.bandHebrew == WaveBand.waistToChest.hebrew)
-        #expect(presentation.bandEnglish == "Waist to chest")
+        #expect(line.contains(WaveBand.knee.hebrew))
+        #expect(presentation.bandHebrew == WaveBand.knee.hebrew)
+        #expect(presentation.bandEnglish == "Knee")
     }
 
     @Test("Units use the Hebrew geresh, never an ASCII apostrophe")
@@ -96,7 +96,7 @@ struct PresentationTests {
         // a surfer answers when asked how big it was.
         #expect(
             presentation.accessibilityLabel
-                == "ציון 82, מותן עד חזה, 1.0 מטר, רוח מזרחית 8 קשר"
+                == "ציון 82, ברך, 1.0 מטר, רוח מזרחית 8 קשר"
         )
     }
 
