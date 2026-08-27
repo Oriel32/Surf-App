@@ -13,6 +13,39 @@ public struct SessionWindow: Sendable, Equatable {
     }
 }
 
+/// One day, as the Week screen promises it.
+///
+/// `peakHour` is carried rather than left for the caller to re-derive, and that
+/// is the whole point of the type. Every caller that recomputed it took the max
+/// over **all** hours while `peakScore` came from daylight only, so on any day
+/// whose best hour fell in the dark the score described one hour and the height
+/// beside it described another. The Week row and the smoke test both shipped
+/// that. A day is a promise about a time of day, so the hour it promises travels
+/// with it.
+public struct DayOutlook: Sendable, Equatable {
+    public let day: Date
+    public let window: SessionWindow?
+    public let peakScore: Int
+    public let isStarred: Bool
+    /// The daylight hour `peakScore` was taken from. `nil` only for a day with
+    /// no lit hours at all.
+    public let peakHour: HourlyForecast?
+
+    public init(
+        day: Date,
+        window: SessionWindow?,
+        peakScore: Int,
+        isStarred: Bool,
+        peakHour: HourlyForecast?
+    ) {
+        self.day = day
+        self.window = window
+        self.peakScore = peakScore
+        self.isStarred = isStarred
+        self.peakHour = peakHour
+    }
+}
+
 /// Turns an hourly score curve into a plan.
 ///
 /// This is what makes the difference between a forecast and an answer: "the best
@@ -110,7 +143,7 @@ public enum WindowFinder {
         in hours: [HourlyForecast],
         calendar: Calendar = .israelStandard,
         minimumScore: Int = usableScore
-    ) -> [(day: Date, window: SessionWindow?, peakScore: Int, isStarred: Bool)] {
+    ) -> [DayOutlook] {
         let grouped = Dictionary(grouping: hours) { hour in
             calendar.startOfDay(for: hour.conditions.timestamp)
         }
@@ -120,11 +153,13 @@ public enum WindowFinder {
             // window is: a row promising 100 at three in the morning is a row
             // nobody can act on.
             let lit = daylight(dayHours)
-            return (
+            let peak = lit.max { $0.score.value < $1.score.value }
+            return DayOutlook(
                 day: day,
                 window: bestWindow(in: dayHours, minimumScore: minimumScore),
-                peakScore: lit.map(\.score.value).max() ?? 0,
-                isStarred: isStarred(dayHours)
+                peakScore: peak?.score.value ?? 0,
+                isStarred: isStarred(dayHours),
+                peakHour: peak
             )
         }
     }

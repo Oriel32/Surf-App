@@ -66,6 +66,37 @@ struct DaylightTests {
         #expect(days[0].peakScore == 61)
     }
 
+    @Test("The peak score and the hour beside it describe the same hour")
+    func peakHourMatchesPeakScore() throws {
+        // The bug this pins, which shipped in two places at once: `peakScore`
+        // was taken over daylight hours while every caller re-derived the peak
+        // HOUR over all 24. So a Week row read "61" from noon and drew its wave
+        // height, slang - and, once wind was added, its wind arrow - from the
+        // 03:00 hundred nobody can surf. Three facts, two different hours.
+        let mixed = [
+            hour(3, score: 100, daylight: false),   // the 03:00 hundred
+            hour(9, score: 55),
+            hour(12, score: 61)
+        ]
+        let day = try #require(WindowFinder.dailyWindows(in: mixed).first)
+        let peak = try #require(day.peakHour)
+
+        #expect(day.peakScore == 61)
+        #expect(peak.score.value == day.peakScore)
+        #expect(peak.conditions.timestamp == Date.utc(2026, 8, 29, 12))
+        #expect(peak.conditions.isDaylight)
+    }
+
+    @Test("A day with no daylight at all promises no hour")
+    func allDarkPromisesNothing() {
+        // Rather than falling back to a nocturnal hour and quietly presenting it
+        // as the day's answer.
+        let night = (0..<6).map { hour($0, score: 100, daylight: false) }
+        let day = WindowFinder.dailyWindows(in: night).first
+        #expect(day?.peakHour == nil)
+        #expect(day?.peakScore == 0)
+    }
+
     @Test("A source with no daylight data behaves exactly as before")
     func permissiveWithoutData() {
         // isDaylight defaults to true, so Stormglass and every existing fixture

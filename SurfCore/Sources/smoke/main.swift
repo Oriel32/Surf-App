@@ -283,8 +283,12 @@ for day in WindowFinder.dailyWindows(in: forecast.hours) {
 
     // Report the conditions at the day's best hour, since that is what the Week
     // row actually promises. A daily mean would describe no hour at all.
+    //
+    // Taken from the outlook rather than re-derived here: computing it locally
+    // took the max over all 24 hours while `peakScore` came from daylight only,
+    // so this table printed a score from noon beside a wind reading from 03:00.
     let dayHours = forecast.hours.filter { calendar.isDate($0.conditions.timestamp, inSameDayAs: day.day) }
-    guard let peak = dayHours.max(by: { $0.score.value < $1.score.value }) else { continue }
+    guard let peak = day.peakHour else { continue }
     let p = peak.conditions
 
     // The day's biggest hour, separately from its best-scoring hour. Another

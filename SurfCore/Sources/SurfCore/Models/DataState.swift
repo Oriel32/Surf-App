@@ -37,6 +37,16 @@ public enum DataState<Value: Sendable>: Sendable {
         return false
     }
 
+    /// Whether there is nothing to lay out yet.
+    ///
+    /// The sibling of `isStale`, and the trigger a view animates its
+    /// placeholder-to-content transition on — `Value` is not required to be
+    /// `Equatable`, so the state itself often cannot be compared.
+    public var isLoading: Bool {
+        if case .loading = self { return true }
+        return false
+    }
+
     public var age: TimeInterval? {
         if case .stale(_, let age) = self { return age }
         return nil

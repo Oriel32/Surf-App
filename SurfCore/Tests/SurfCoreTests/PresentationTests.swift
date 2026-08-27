@@ -132,6 +132,23 @@ struct PresentationTests {
         #expect(presentation.windRelationHebrew == WindRelation.offshore.hebrew)
     }
 
+    @Test("The spoken wind is built once and reused by every surface that says it")
+    func windIsSpokenTheSameWayEverywhere() {
+        // Home, Week and Spots all announce wind. Deriving the sentence in each
+        // row is how three surfaces end up wording the same fact differently, so
+        // it is built in the translation stage and read from there.
+        #expect(presentation.windSpokenHebrew == "רוח מזרחית 8 קשר")
+
+        // Spoken, therefore free of the isolates that a screen reader would
+        // read as punctuation - unlike `windLine`, which is for the eye.
+        #expect(!presentation.windSpokenHebrew.contains(HebrewText.leftToRightIsolate))
+        #expect(!presentation.windSpokenHebrew.contains(HebrewText.popDirectionalIsolate))
+
+        // And it is the same string the card-level label already announces, not
+        // a second copy that can drift away from it.
+        #expect(presentation.accessibilityLabel.contains(presentation.windSpokenHebrew))
+    }
+
     @Test("The score arrives with its band and its token")
     func scoreCarriesBandAndToken() {
         #expect(presentation.scoreBand == .excellent)
@@ -170,6 +187,114 @@ struct PresentationTests {
     func presentsAnHourlyForecast() {
         let hour = HourlyForecast(conditions: conditions, score: score, alerts: [])
         #expect(Translator.present(hour) == presentation)
+    }
+}
+
+@Suite("Explaining a score")
+struct ScoreExplanationTests {
+    private func surfScore(
+        energy: Double = 0.9,
+        size: Double = 0.9,
+        shape: Double = 0.9,
+        wind: Double = 0.9,
+        gust: Double = 0.9
+    ) -> MatchScore {
+        MatchScore(
+            value: 82,
+            sport: .surfing,
+            components: [
+                "energy": energy, "size": size, "shape": shape,
+                "wind": wind, "gust": gust
+            ]
+        )
+    }
+
+    @Test("Factors come back in a stable order, not the dictionary's")
+    func orderIsStable() {
+        // A dictionary has no order, so a view iterating `components` directly
+        // reshuffles the rows on every redraw. The order is declared per sport.
+        let factors = Translator.explain(surfScore()).factors.map(\.component)
+        #expect(factors == [.energy, .size, .shape, .wind, .gust])
+
+        let sup = MatchScore(
+            value: 60, sport: .sup, components: ["wind": 0.8, "flatness": 0.9]
+        )
+        #expect(Translator.explain(sup).factors.map(\.component) == [.flatness, .wind])
+    }
+
+    @Test("The limiting factor is the one actually holding the score down")
+    func namesTheWeakest() throws {
+        // The score is the product of these, so the minimum costs the most.
+        let held = surfScore(shape: 0.2)
+        let explanation = Translator.explain(held)
+
+        #expect(explanation.limitingFactor == .shape)
+        #expect(explanation.limitingSentenceHebrew == ScoreComponent.shape.limitingSentenceHebrew)
+
+        // And the view is told which row to highlight rather than re-deriving it.
+        let limiting = try #require(explanation.factors.first { $0.isLimiting })
+        #expect(limiting.component == .shape)
+        #expect(explanation.factors.filter(\.isLimiting).count == 1)
+    }
+
+    @Test("A good day is not given an invented culprit")
+    func nothingToBlameOnAGoodDay() {
+        // If every bad day and every good day both name a limiting factor, the
+        // label stops meaning anything on the day it matters.
+        let explanation = Translator.explain(surfScore())
+        #expect(explanation.limitingFactor == nil)
+        #expect(explanation.limitingSentenceHebrew == nil)
+        #expect(explanation.factors.allSatisfy { !$0.isLimiting })
+    }
+
+    @Test("A key the engine does not emit for this sport is not invented")
+    func missingKeysAreDropped() {
+        // Surfing reports no `direction`; kite reports no `shape`. A card that
+        // rendered every case would show empty rows for the other sport's model.
+        let kite = MatchScore(
+            value: 70, sport: .kitesurfing,
+            components: ["wind": 0.9, "direction": 1.0, "height": 0.6]
+        )
+        let explanation = Translator.explain(kite)
+        #expect(explanation.factors.map(\.component) == [.wind, .direction, .height])
+        #expect(explanation.limitingFactor == .height)
+    }
+
+    @Test("A score with no components explains nothing rather than crashing")
+    func emptyComponents() {
+        let bare = MatchScore(value: 50, sport: .surfing)
+        let explanation = Translator.explain(bare)
+        #expect(explanation.factors.isEmpty)
+        #expect(explanation.limitingFactor == nil)
+    }
+
+    @Test("Every component the engine can emit has Hebrew and a sentence")
+    func everyComponentIsLocalised() {
+        for component in ScoreComponent.allCases {
+            #expect(!component.hebrew.isEmpty)
+            #expect(!component.limitingSentenceHebrew.isEmpty)
+        }
+    }
+
+    @Test("Every key the engine emits is one the display knows how to order")
+    func engineKeysAreAllCovered() {
+        // The join between the engine's stringly-typed dictionary and the typed
+        // display keys. Adding a factor to `MatchScoreEngine` without adding it
+        // to `ScoreComponent.order` would silently drop it from the card, and
+        // this is what catches that.
+        let conditions = SpotConditions.fixture(
+            waveHeightMeters: 1.0, periodSeconds: 8, windSpeedMPS: mps(knots: 14)
+        )
+        for sport in Sport.allCases {
+            let score = MatchScoreEngine.score(
+                for: conditions, profile: UserProfile(sport: sport, skill: .intermediate)
+            )
+            let shown = Set(Translator.explain(score).factors.map(\.component.rawValue))
+            #expect(
+                shown == Set(score.components.keys),
+                "\(sport) emits \(Set(score.components.keys).subtracting(shown)) that the card would not show"
+            )
+        }
     }
 }
 
