@@ -38,6 +38,10 @@ struct BestWindowSection: View {
 @MainActor
 struct BuoySection: View {
     let status: BuoyStatus
+    /// Where the buoy is relative to this beach. Israel has one live wave buoy,
+    /// so most spots are reading a measurement from up or down the coast — and
+    /// the distance is what keeps showing it honest.
+    let reference: BuoyReference?
     let heightUnit: HeightUnit
     let theme: Theme
 
@@ -57,8 +61,15 @@ struct BuoySection: View {
     private var content: some View {
         switch status {
         case .fresh(let reading):
-            Text("מדידת מצוף: \(HebrewText.height(reading.significantWaveHeightMeters, unit: heightUnit)) · \(reading.age().ageInWordsHebrew)")
-                .foregroundStyle(theme.text1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(HebrewText.height(reading.significantWaveHeightMeters, unit: heightUnit)) · \(reading.age().ageInWordsHebrew)")
+                    .foregroundStyle(theme.text1)
+                if let reference {
+                    Text(reference.hebrewSummary)
+                        .font(SurfFont.label)
+                        .foregroundStyle(theme.text2)
+                }
+            }
 
         case .stale(_, let age):
             // Deliberately no number. A months-old storm reading rendered as
@@ -67,7 +78,7 @@ struct BuoySection: View {
                 .foregroundStyle(Aqua.choppy)
 
         case .unavailable:
-            Text("אין מצוף בקרבת החוף")
+            Text("אין מדידה זמינה")
                 .foregroundStyle(theme.text2)
         }
     }

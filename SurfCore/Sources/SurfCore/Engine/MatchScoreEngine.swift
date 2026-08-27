@@ -65,18 +65,26 @@ public enum MatchScoreEngine {
 
         let wind = tuning.wind[c.windRelation].value(c.windSpeedKnots)
 
+        // How ragged the wind is, separately from how strong. A 9-knot mean
+        // gusting to 16 is the day people call windy while every mean-speed
+        // band in this model calls it light.
+        let gust = tuning.gust.value(c.gustRatio)
+
         // Multiplied, not summed: a session needs power AND a rideable size AND
         // a wave that breaks properly. The floors keep a genuinely big
         // long-period day from reading as a flat zero just because it is blown
         // out - the swell still arrived, and that is worth knowing.
         let waveQuality = energy * size * (tuning.periodFloor + (1 - tuning.periodFloor) * shape)
-        let value = waveQuality * (tuning.windFloor + (1 - tuning.windFloor) * wind)
+        let windQuality = (tuning.windFloor + (1 - tuning.windFloor) * wind)
+            * (tuning.gustFloor + (1 - tuning.gustFloor) * gust)
+        let value = waveQuality * windQuality
 
         return (value, [
             "energy": energy,
             "size": size,
             "shape": shape,
-            "wind": wind
+            "wind": wind,
+            "gust": gust
         ])
     }
 

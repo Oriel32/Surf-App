@@ -254,6 +254,8 @@ public enum WaveTransform {
             windRelation: relation,
             openSeaHeightMeters: sample.waveHeightMeters,
             isSynthetic: isSynthetic,
+            windGustMPS: sample.windGustMPS,
+            isDaylight: sample.isDaylight,
             seaSurfaceTemperatureC: sample.seaSurfaceTemperatureC,
             airTemperatureC: sample.airTemperatureC,
             seaLevelMeters: sample.seaLevelMeters

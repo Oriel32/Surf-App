@@ -1,3 +1,4 @@
+import Charts
 import SwiftUI
 import SurfCore
 
@@ -44,8 +45,78 @@ struct WeekView: View {
         }
     }
 
-    private var days: [(day: Date, window: SessionWindow?, peakScore: Int)] {
+    private var days: [(day: Date, window: SessionWindow?, peakScore: Int, isStarred: Bool)] {
         model.days(for: model.selectedSpotID)
+    }
+
+    /// The whole week in one picture: which day, before which hour.
+    ///
+    /// Score as bars because the question the chart answers is "which day", and
+    /// bars compare. Height as a line on its own scale because it is a second,
+    /// different quantity — plotting both as bars would invite adding them.
+    @ViewBuilder
+    private var weekChart: some View {
+        if days.count > 1 {
+            VStack(alignment: .leading, spacing: 10) {
+                Chart {
+                    ForEach(days, id: \.day) { entry in
+                        BarMark(
+                            x: .value("יום", ClockText.weekdayShortHebrew(entry.day)),
+                            y: .value("ציון", entry.peakScore)
+                        )
+                        .foregroundStyle(ScoreBand.band(forScore: entry.peakScore).colorToken.color)
+                        .cornerRadius(5)
+                        .annotation(position: .top, spacing: 2) {
+                            // The star sits on the chart as well as the row, so
+                            // the good day is findable without reading.
+                            if entry.isStarred {
+                                Image(systemName: "star.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(Aqua.aqua600)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                    }
+
+                    ForEach(days, id: \.day) { entry in
+                        if let height = peakHour(on: entry.day)?.conditions.surfRange.setMeters {
+                            LineMark(
+                                x: .value("יום", ClockText.weekdayShortHebrew(entry.day)),
+                                y: .value("גובה", height * heightScale),
+                                series: .value("סדרה", "height")
+                            )
+                            .foregroundStyle(theme.text2)
+                            .interpolationMethod(.monotone)
+                            .symbol(.circle)
+                        }
+                    }
+                }
+                .chartYScale(domain: 0...100)
+                .chartYAxis {
+                    AxisMarks(values: [0, 50, 100])
+                }
+                .frame(height: 160)
+
+                HStack(spacing: 16) {
+                    LegendSwatch(colour: Aqua.aqua600, label: "ציון", dashed: false, theme: theme)
+                    LegendSwatch(colour: theme.text2, label: "גובה גלים", dashed: false, theme: theme)
+                }
+            }
+            .padding(16)
+            .surfCard(theme, radius: Metric.innerRadius)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(chartLabel)
+        }
+    }
+
+    /// Height shares the score's 0–100 axis, so it needs scaling into it. Two
+    /// metres maps to the top, which covers everything this coast produces.
+    private var heightScale: Double { 50 }
+
+    private var chartLabel: String {
+        let best = days.max { $0.peakScore < $1.peakScore }
+        guard let best else { return "תרשים שבועי" }
+        return "תרשים שבועי. היום הטוב ביותר: \(ClockText.weekdayHebrew(best.day)), ציון \(best.peakScore)"
     }
 
     /// The highest score across the whole week, so each row's bar is drawn
@@ -57,6 +128,8 @@ struct WeekView: View {
 
     @ViewBuilder
     private var rows: some View {
+        weekChart
+
         ForEach(days, id: \.day) { entry in
             NavigationLink {
                 if let spot = model.selectedSpot {
@@ -68,6 +141,7 @@ struct WeekView: View {
                     window: entry.window,
                     peakScore: entry.peakScore,
                     weekPeak: weekPeak,
+                    isStarred: entry.isStarred,
                     peakHour: peakHour(on: entry.day),
                     heightUnit: model.settings.heightUnit,
                     theme: theme
@@ -106,6 +180,9 @@ struct WeekRow: View {
     let window: SessionWindow?
     let peakScore: Int
     let weekPeak: Int
+    /// 80 or better, held for two or more consecutive daylight hours. Rare on
+    /// purpose: a star that appears most weeks tells you nothing.
+    let isStarred: Bool
     let peakHour: HourlyForecast?
     let heightUnit: HeightUnit
     let theme: Theme
@@ -123,14 +200,22 @@ struct WeekRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(ClockText.weekdayHebrew(day))
-                    .font(SurfFont.cardTitle)
-                    .foregroundStyle(theme.text1)
+                HStack(spacing: 5) {
+                    Text(ClockText.weekdayHebrew(day))
+                        .font(SurfFont.cardTitle)
+                        .foregroundStyle(theme.text1)
+                    if isStarred {
+                        Image(systemName: "star.fill")
+                            .font(.caption2)
+                            .foregroundStyle(Aqua.aqua600)
+                            .accessibilityHidden(true)
+                    }
+                }
                 Text(ClockText.dayMonth(day))
                     .font(SurfFont.meta)
                     .foregroundStyle(theme.text2)
             }
-            .frame(width: 74, alignment: .leading)
+            .frame(width: 84, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
@@ -181,6 +266,8 @@ struct WeekRow: View {
 
     private var rowLabel: String {
         var parts = [ClockText.weekdayHebrew(day), "ציון \(peakScore)"]
+        // The star carries a word, never colour or a glyph alone.
+        if isStarred { parts.append("יום מצוין") }
         if let presentation { parts.append(presentation.bandHebrew) }
         if let window {
             parts.append("החלון \(ClockText.hourMinute(window.start)) עד \(ClockText.hourMinute(window.end))")

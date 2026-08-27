@@ -95,7 +95,53 @@ enum ScoreTuning {
         /// so those are the plateau. Below 0.4 there is nothing to ride. The
         /// upper fall is loose on purpose - `height` is what rules out a sea
         /// that is simply too big, and it should not be ruled out twice.
-        let energy = Trapezoid(riseStart: 0.4, plateauStart: 1.25, plateauEnd: 10.0, fallEnd: 40.0)
+        /// **Deliberately left where it was.** Raising the plateau was the first
+        /// answer to "the scores read too high", and measurement rejected it: at
+        /// a plateau of 4.0 a glassy 0.9 m at 8 s morning — an unambiguously
+        /// good day, and one the research puts squarely inside the golden range
+        /// that earns full height marks — dropped to 79.
+        ///
+        /// The complaint was never that good days score well. It was that a
+        /// gusty day scored 80 and that a peak of 99 landed at 20:00, after
+        /// sunset. Those are the daylight filter and the gust term, and neither
+        /// needs this curve moved.
+        /// Calibrated against two fixed points rather than guessed.
+        ///
+        /// **The top, 3.2 kW/m**, is 0.9 m at 8 s — the middle of the research's
+        /// golden range and the day the test suite already encodes as "scores
+        /// near the top". At the old plateau of 1.25 a 0.6 m, 7.7 s, 7-knot
+        /// sideshore morning also scored 100, and a pleasant small morning is
+        /// not a hundred-out-of-hundred day. That was the saturation behind the
+        /// run of 99s.
+        ///
+        /// **The rise, 0.15**, removes a cliff: at 0.4 a genuinely flat day
+        /// (0.26-0.34 m at 5 s, measured) scored a flat zero every hour, which
+        /// reads as broken data rather than a small sea and draws an empty bar
+        /// on the week chart.
+        let energy = Trapezoid(riseStart: 0.15, plateauStart: 3.2, plateauEnd: 12.0, fallEnd: 45.0)
+
+        /// How ragged the wind is — gust divided by mean, not gust in knots.
+        ///
+        /// This is the term that was missing when a day got called "very windy"
+        /// and still scored 80. Measured here, gusts run 1.7x to 3.2x the mean
+        /// while the mean itself stays inside every light-wind band the score
+        /// has, so nothing in the model could see the thing being complained
+        /// about.
+        ///
+        /// The bounds come from the coast, not from a hunch. A first attempt put
+        /// the plateau at 1.4x and measurement threw it out: the *median* gust
+        /// ratio here is 1.85-2.04 on every day of an ordinary week, so a 1.4
+        /// plateau charged every hour the same ~18% and discriminated nothing.
+        /// A penalty everything pays is not a penalty.
+        ///
+        /// Flat to 1.9x, which is this coast's normal, so a typical day pays
+        /// nothing. Zero by 3.4x, just past the 3.1-3.8 peaks observed on the
+        /// days that actually get called windy.
+        let gust = Trapezoid(riseStart: -1, plateauStart: 0, plateauEnd: 1.9, fallEnd: 3.4)
+
+        /// Gustiness degrades a session; it does not cancel one. Even the
+        /// raggedest wind leaves over half the score standing.
+        let gustFloor = 0.55
 
         let wind = RelationCurves(
             // A light offshore is the best wind a surfer can get; a hard one
@@ -114,7 +160,12 @@ enum ScoreTuning {
         /// Keeps a genuinely big, long-period day from reading as a flat zero
         /// just because it is blown out. It is still worth knowing the swell
         /// arrived.
-        let windFloor = 0.15
+        ///
+        /// Lowered from 0.15: a fully blown-out day was keeping a seventh of its
+        /// wave quality, which propped up the bottom of the range and made
+        /// ruined days look merely mediocre. 5% still says "the swell is there"
+        /// without pretending the day is surfable.
+        let windFloor = 0.05
     }
 
     static let surfing = Surfing()

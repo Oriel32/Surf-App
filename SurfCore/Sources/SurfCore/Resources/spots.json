@@ -9,7 +9,7 @@
     "exposureCoefficient": 0.50,
     "shorelineNormalDegrees": 300,
     "breakDepthMeters": 2.0,
-    "buoyStationID": "shikmona"
+    "buoyStationID": "hadera"
   },
   {
     "id": "hadera",
@@ -57,7 +57,7 @@
     "exposureCoefficient": 0.85,
     "shorelineNormalDegrees": 270,
     "breakDepthMeters": 2.0,
-    "buoyStationID": null
+    "buoyStationID": "hadera"
   },
   {
     "id": "hatzuk",
@@ -69,7 +69,7 @@
     "exposureCoefficient": 0.90,
     "shorelineNormalDegrees": 270,
     "breakDepthMeters": 2.2,
-    "buoyStationID": null
+    "buoyStationID": "hadera"
   },
   {
     "id": "tel-aviv-hilton",
@@ -81,7 +81,7 @@
     "exposureCoefficient": 0.85,
     "shorelineNormalDegrees": 270,
     "breakDepthMeters": 2.0,
-    "buoyStationID": null
+    "buoyStationID": "hadera"
   },
   {
     "id": "bat-yam",
@@ -93,7 +93,7 @@
     "exposureCoefficient": 0.85,
     "shorelineNormalDegrees": 270,
     "breakDepthMeters": 2.0,
-    "buoyStationID": null
+    "buoyStationID": "hadera"
   },
   {
     "id": "palmachim",
@@ -105,7 +105,7 @@
     "exposureCoefficient": 0.90,
     "shorelineNormalDegrees": 270,
     "breakDepthMeters": 2.2,
-    "buoyStationID": null
+    "buoyStationID": "hadera"
   },
   {
     "id": "ashdod-lido",
@@ -117,7 +117,7 @@
     "exposureCoefficient": 0.72,
     "shorelineNormalDegrees": 270,
     "breakDepthMeters": 2.0,
-    "buoyStationID": null
+    "buoyStationID": "hadera"
   },
   {
     "id": "ashkelon-delilah",
@@ -129,7 +129,7 @@
     "exposureCoefficient": 0.78,
     "shorelineNormalDegrees": 270,
     "breakDepthMeters": 2.0,
-    "buoyStationID": null
+    "buoyStationID": "hadera"
   },
   {
     "id": "eilat-village",

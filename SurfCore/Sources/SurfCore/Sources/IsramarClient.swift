@@ -19,12 +19,55 @@ import Foundation
 public struct IsramarClient: ObservationSource {
     public let identifier = "isramar"
 
-    /// Station id → filename. The casing really is inconsistent between
-    /// stations on the live server; these strings are verified, not guessed.
-    public static let stationFiles: [String: String] = [
-        "hadera": "Hadera_Hs_Per",       // verified live, hourly
-        "shikmona": "ShikBuoy_HS_Per"    // verified stale since 2026-01-09
+    /// A measuring station: where it is, what it is called, and which file the
+    /// scraped endpoint serves it from.
+    public struct Station: Sendable, Equatable {
+        public let id: String
+        public let nameHebrew: String
+        public let latitude: Double
+        public let longitude: Double
+        /// The casing really is inconsistent between stations on the live
+        /// server; these strings are verified by hand, not guessed.
+        public let file: String
+    }
+
+    /// Israel has exactly one live wave buoy. Shikmona stays in the table
+    /// because its frozen-since-January payload is what the staleness gate is
+    /// tested against — but no spot points at it any more.
+    public static let stations: [String: Station] = [
+        "hadera": Station(
+            id: "hadera", nameHebrew: "חדרה",
+            latitude: 32.4750, longitude: 34.8600,
+            file: "Hadera_Hs_Per"
+        ),
+        "shikmona": Station(
+            id: "shikmona", nameHebrew: "שקמונה",
+            latitude: 32.8300, longitude: 34.9500,
+            file: "ShikBuoy_HS_Per"
+        )
     ]
+
+    /// Station id → filename, kept for callers that only need the path.
+    public static var stationFiles: [String: String] {
+        stations.mapValues(\.file)
+    }
+
+    /// Where a station sits relative to a spot, so the reading can be shown
+    /// with the distance that makes it honest.
+    public static func reference(for station: Station, from spot: Spot) -> BuoyReference {
+        BuoyReference(
+            stationID: station.id,
+            nameHebrew: station.nameHebrew,
+            distanceKilometres: Geo.distanceKilometres(
+                fromLatitude: spot.latitude, longitude: spot.longitude,
+                toLatitude: station.latitude, longitude: station.longitude
+            ),
+            bearingDegrees: Geo.bearingDegrees(
+                fromLatitude: spot.latitude, longitude: spot.longitude,
+                toLatitude: station.latitude, longitude: station.longitude
+            )
+        )
+    }
 
     private static let baseURL = "https://isramar.ocean.org.il/isramar2009/station/data"
 
@@ -43,10 +86,10 @@ public struct IsramarClient: ObservationSource {
     }
 
     public func latestObservation(stationID: String) async throws -> BuoyObservation {
-        guard let file = Self.stationFiles[stationID] else {
+        guard let station = Self.stations[stationID] else {
             throw SourceError.unknownStation(stationID)
         }
-        guard let url = URL(string: "\(Self.baseURL)/\(file).json") else {
+        guard let url = URL(string: "\(Self.baseURL)/\(station.file).json") else {
             throw SourceError.transport("Could not build ISRAMAR URL for \(stationID)")
         }
 

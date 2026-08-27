@@ -76,6 +76,7 @@ public struct OpenMeteoClient: ForecastSource {
         let data = try await transport.data(from: weatherURL(for: spot), headers: [:])
         let weather = try decode(WeatherResponse.self, from: data)
         let formatter = DateParsing.makeUTCFormatter(DateParsing.openMeteoFormat)
+        let daylight = DaylightTable(weather.daily, formatter: formatter)
 
         return weather.hourly.time.enumerated().compactMap { index, stamp in
             guard let date = formatter.date(from: stamp),
@@ -90,7 +91,9 @@ public struct OpenMeteoClient: ForecastSource {
                 waveDirectionDegrees: direction,
                 windSpeedMPS: speed,
                 windDirectionDegrees: direction,
-                airTemperatureC: weather.hourly.temperature?[safe: index] ?? nil
+                windGustMPS: weather.hourly.windGusts?[safe: index] ?? nil,
+                airTemperatureC: weather.hourly.temperature?[safe: index] ?? nil,
+                isDaylight: daylight.isDaylight(date, dayKey: String(stamp.prefix(10)))
             )
         }
     }
@@ -122,7 +125,14 @@ public struct OpenMeteoClient: ForecastSource {
         components.queryItems = [
             URLQueryItem(name: "latitude", value: String(spot.latitude)),
             URLQueryItem(name: "longitude", value: String(spot.longitude)),
-            URLQueryItem(name: "hourly", value: "wind_speed_10m,wind_direction_10m,temperature_2m"),
+            URLQueryItem(
+                name: "hourly",
+                value: "wind_speed_10m,wind_direction_10m,wind_gusts_10m,temperature_2m"
+            ),
+            // Sunrise and sunset ride along on the request we were making
+            // anyway, which is what makes daylight filtering free. Asking a
+            // separate endpoint for them would have cost a round trip per spot.
+            URLQueryItem(name: "daily", value: "sunrise,sunset"),
             // Ask for SI at the boundary so nothing downstream has to convert.
             URLQueryItem(name: "wind_speed_unit", value: "ms"),
             URLQueryItem(name: "timezone", value: "UTC"),
@@ -185,16 +195,57 @@ public struct OpenMeteoClient: ForecastSource {
             let time: [String]
             let windSpeed: [Double?]?
             let windDirection: [Double?]?
+            let windGusts: [Double?]?
             let temperature: [Double?]?
 
             enum CodingKeys: String, CodingKey {
                 case time
                 case windSpeed = "wind_speed_10m"
                 case windDirection = "wind_direction_10m"
+                case windGusts = "wind_gusts_10m"
                 case temperature = "temperature_2m"
             }
         }
+
+        /// One entry per forecast day, in the same `yyyy-MM-dd` keying as the
+        /// hourly timestamps' date prefix.
+        struct Daily: Decodable {
+            let time: [String]
+            let sunrise: [String?]?
+            let sunset: [String?]?
+        }
+
         let hourly: Hourly
+        /// Optional so a response without `daily` still decodes — daylight then
+        /// degrades to "always", which is the pre-existing behaviour.
+        let daily: Daily?
+    }
+
+    /// Sunrise and sunset per calendar day, for deciding whether an hour is
+    /// surfable at all.
+    private struct DaylightTable {
+        private let byDay: [String: (rise: Date, set: Date)]
+
+        init(_ daily: WeatherResponse.Daily?, formatter: DateFormatter) {
+            guard let daily else { byDay = [:]; return }
+            var table: [String: (Date, Date)] = [:]
+            for (index, day) in daily.time.enumerated() {
+                guard let riseText = daily.sunrise?[safe: index] ?? nil,
+                      let setText = daily.sunset?[safe: index] ?? nil,
+                      let rise = formatter.date(from: riseText),
+                      let set = formatter.date(from: setText)
+                else { continue }
+                table[day] = (rise, set)
+            }
+            byDay = table
+        }
+
+        /// Permissive when the day is missing: an absent sunrise must not make
+        /// a whole day vanish from the forecast.
+        func isDaylight(_ stamp: Date, dayKey: String) -> Bool {
+            guard let window = byDay[dayKey] else { return true }
+            return stamp >= window.rise && stamp <= window.set
+        }
     }
 
     // MARK: - Merge
@@ -202,17 +253,23 @@ public struct OpenMeteoClient: ForecastSource {
     private func merge(marine: MarineResponse, weather: WeatherResponse) throws -> [RawMarineSample] {
         // Index the wind series by timestamp rather than assuming the two
         // endpoints return identical, aligned time arrays.
-        var windByTime: [String: (speed: Double, direction: Double, air: Double?)] = [:]
+        var windByTime: [String: (speed: Double, direction: Double, gust: Double?, air: Double?)] = [:]
         for (index, stamp) in weather.hourly.time.enumerated() {
             guard let speed = weather.hourly.windSpeed?[safe: index] ?? nil,
                   let direction = weather.hourly.windDirection?[safe: index] ?? nil
             else { continue }
-            windByTime[stamp] = (speed, direction, weather.hourly.temperature?[safe: index] ?? nil)
+            windByTime[stamp] = (
+                speed,
+                direction,
+                weather.hourly.windGusts?[safe: index] ?? nil,
+                weather.hourly.temperature?[safe: index] ?? nil
+            )
         }
 
         // One formatter for the whole series — building one per row would cost
         // more than the rest of the parse put together.
         let formatter = DateParsing.makeUTCFormatter(DateParsing.openMeteoFormat)
+        let daylight = DaylightTable(weather.daily, formatter: formatter)
 
         let hourly = marine.hourly
         return hourly.time.enumerated().compactMap { index, stamp -> RawMarineSample? in
@@ -242,9 +299,11 @@ public struct OpenMeteoClient: ForecastSource {
                 ),
                 windSpeedMPS: wind.speed,
                 windDirectionDegrees: wind.direction,
+                windGustMPS: wind.gust,
                 airTemperatureC: wind.air,
                 seaSurfaceTemperatureC: hourly.seaSurfaceTemperature?[safe: index] ?? nil,
-                seaLevelMeters: hourly.seaLevelHeightMsl?[safe: index] ?? nil
+                seaLevelMeters: hourly.seaLevelHeightMsl?[safe: index] ?? nil,
+                isDaylight: daylight.isDaylight(date, dayKey: String(stamp.prefix(10)))
             )
         }
     }

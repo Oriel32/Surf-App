@@ -32,10 +32,35 @@ public enum WindowFinder {
     /// recommend is the app telling the user two different things at once.
     public static let usableScore = 40
 
+    /// The score a day must hold, for `starHours` consecutive daylight hours,
+    /// to be worth marking as special.
+    ///
+    /// A star has to be rare or it says nothing. Two hours rather than one so a
+    /// single fluke hour cannot earn it, and daylight-only because a perfect
+    /// 03:00 is not a session.
+    public static let starScore = 80
+    public static let starHours = 2
+
+    /// Only hours a person could actually be in the water.
+    ///
+    /// Measured on this coast before this existed: the Week screen was
+    /// reporting a peak of 100 at 03:00 local, and another at 20:00 — nearly an
+    /// hour after sunset. Neither was a wrong number; both were useless ones.
+    private static func daylight(_ hours: [HourlyForecast]) -> [HourlyForecast] {
+        let lit = hours.filter(\.conditions.isDaylight)
+        // A source with no daylight data marks everything lit, so an empty
+        // result means the day genuinely has no surfable hours rather than that
+        // the filter misfired.
+        return lit
+    }
+
     public static func bestWindow(
         in hours: [HourlyForecast],
         minimumScore: Int = usableScore
     ) -> SessionWindow? {
+        // Dark hours are dropped before the run search rather than after, so a
+        // run cannot be stitched across sunset.
+        let hours = daylight(hours)
         var best: SessionWindow?
         var runStart: Int?
 
@@ -85,18 +110,42 @@ public enum WindowFinder {
         in hours: [HourlyForecast],
         calendar: Calendar = .israelStandard,
         minimumScore: Int = usableScore
-    ) -> [(day: Date, window: SessionWindow?, peakScore: Int)] {
+    ) -> [(day: Date, window: SessionWindow?, peakScore: Int, isStarred: Bool)] {
         let grouped = Dictionary(grouping: hours) { hour in
             calendar.startOfDay(for: hour.conditions.timestamp)
         }
         return grouped.keys.sorted().map { day in
             let dayHours = (grouped[day] ?? []).sorted { $0.conditions.timestamp < $1.conditions.timestamp }
+            // The peak is taken over daylight only, for the same reason the
+            // window is: a row promising 100 at three in the morning is a row
+            // nobody can act on.
+            let lit = daylight(dayHours)
             return (
                 day: day,
                 window: bestWindow(in: dayHours, minimumScore: minimumScore),
-                peakScore: dayHours.map(\.score.value).max() ?? 0
+                peakScore: lit.map(\.score.value).max() ?? 0,
+                isStarred: isStarred(dayHours)
             )
         }
+    }
+
+    /// Whether a day is worth a star: `starScore` or better, held for
+    /// `starHours` consecutive daylight hours.
+    ///
+    /// Consecutive matters. A day that touches 85 at dawn, collapses, and
+    /// touches 85 again at dusk is two brief chances, not a good day, and
+    /// counting total hours rather than a run would call it one.
+    public static func isStarred(_ hours: [HourlyForecast]) -> Bool {
+        var run = 0
+        for hour in daylight(hours).sorted(by: { $0.conditions.timestamp < $1.conditions.timestamp }) {
+            if hour.score.value >= starScore {
+                run += 1
+                if run >= starHours { return true }
+            } else {
+                run = 0
+            }
+        }
+        return false
     }
 }
 

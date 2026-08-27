@@ -72,6 +72,7 @@ struct HomeView: View {
         if model.settings.showBuoy {
             BuoySection(
                 status: forecast.buoy,
+                reference: forecast.buoyReference,
                 heightUnit: model.settings.heightUnit,
                 theme: theme
             )

@@ -78,9 +78,27 @@ public struct RawMarineSample: Sendable, Equatable {
     /// Direction the wind blows *from*, degrees true.
     public let windDirectionDegrees: Double
 
+    /// Gust speed, m/s. Absent from sources that do not report it.
+    ///
+    /// The gust matters more than the mean for how a sea *feels*. A 9-knot mean
+    /// gusting to 16 is a shifty, textured session and a 9-knot mean gusting to
+    /// 11 is a clean one, and the mean alone cannot tell them apart.
+    public let windGustMPS: Double?
+
     public let airTemperatureC: Double?
     public let seaSurfaceTemperatureC: Double?
     public let seaLevelMeters: Double?
+
+    /// Whether this hour falls between sunrise and sunset at the spot.
+    ///
+    /// Decided at ingest, from the provider's own sunrise and sunset, because
+    /// that is where the date and the coordinates are both to hand. A forecast
+    /// that reports its best hour at 03:00 is not wrong so much as useless, and
+    /// this is what lets the window search say so.
+    ///
+    /// Defaults to `true` for sources that do not supply it — being permissive
+    /// keeps a source without daylight data working exactly as it did before.
+    public let isDaylight: Bool
 
     public init(
         timestamp: Date,
@@ -91,9 +109,11 @@ public struct RawMarineSample: Sendable, Equatable {
         windWave: SwellComponent? = nil,
         windSpeedMPS: Double,
         windDirectionDegrees: Double,
+        windGustMPS: Double? = nil,
         airTemperatureC: Double? = nil,
         seaSurfaceTemperatureC: Double? = nil,
-        seaLevelMeters: Double? = nil
+        seaLevelMeters: Double? = nil,
+        isDaylight: Bool = true
     ) {
         self.timestamp = timestamp
         self.waveHeightMeters = waveHeightMeters
@@ -103,9 +123,11 @@ public struct RawMarineSample: Sendable, Equatable {
         self.windWave = windWave
         self.windSpeedMPS = windSpeedMPS
         self.windDirectionDegrees = windDirectionDegrees
+        self.windGustMPS = windGustMPS
         self.airTemperatureC = airTemperatureC
         self.seaSurfaceTemperatureC = seaSurfaceTemperatureC
         self.seaLevelMeters = seaLevelMeters
+        self.isDaylight = isDaylight
     }
 
     /// The independent wave trains present in this hour.

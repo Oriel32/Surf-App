@@ -109,6 +109,13 @@ public struct SpotConditions: Sendable, Equatable {
     public let windDirectionDegrees: Double
     public let windRelation: WindRelation
 
+    /// Gust speed, m/s, where the source reports it.
+    public let windGustMPS: Double?
+
+    /// Whether this hour is between sunrise and sunset at the spot. A forecast
+    /// that recommends 03:00 is not wrong, it is useless.
+    public let isDaylight: Bool
+
     /// The untransformed open-sea height, kept so the detail view can show its
     /// work. Displaying both is what proves the app transformed the data rather
     /// than reprinting a model.
@@ -150,6 +157,25 @@ public struct SpotConditions: Sendable, Equatable {
         WindStrength.strength(forKnots: windSpeedKnots)
     }
 
+    public var windGustKnots: Double? {
+        windGustMPS.map { Units.knots(fromMetersPerSecond: $0) }
+    }
+
+    /// Gust divided by mean — how *ragged* the wind is, rather than how strong.
+    ///
+    /// This is the number that separates a day people call "very windy" from
+    /// one they call clean, even when the two share a mean speed: a 9-knot mean
+    /// gusting to 16 shifts constantly and textures the face, and measured on
+    /// this coast that ratio reaches 3x while the mean stays inside every
+    /// "light wind" band the score has.
+    ///
+    /// 1.0 when the source reports no gust, which reads as perfectly steady and
+    /// therefore costs nothing.
+    public var gustRatio: Double {
+        guard let gust = windGustMPS, windSpeedMPS > 0.5 else { return 1.0 }
+        return max(1.0, gust / windSpeedMPS)
+    }
+
     public init(
         timestamp: Date,
         spotID: String,
@@ -162,6 +188,8 @@ public struct SpotConditions: Sendable, Equatable {
         windRelation: WindRelation,
         openSeaHeightMeters: Double,
         isSynthetic: Bool,
+        windGustMPS: Double? = nil,
+        isDaylight: Bool = true,
         seaSurfaceTemperatureC: Double? = nil,
         airTemperatureC: Double? = nil,
         seaLevelMeters: Double? = nil
@@ -177,6 +205,8 @@ public struct SpotConditions: Sendable, Equatable {
         self.windRelation = windRelation
         self.openSeaHeightMeters = openSeaHeightMeters
         self.isSynthetic = isSynthetic
+        self.windGustMPS = windGustMPS
+        self.isDaylight = isDaylight
         self.seaSurfaceTemperatureC = seaSurfaceTemperatureC
         self.airTemperatureC = airTemperatureC
         self.seaLevelMeters = seaLevelMeters

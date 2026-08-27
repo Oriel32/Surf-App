@@ -14,9 +14,30 @@ public struct SpotForecast: Sendable {
     public let spot: Spot
     public let hours: [HourlyForecast]
     public let buoy: BuoyStatus
+    /// Where the buoy behind `buoy` sits relative to this spot, so the reading
+    /// can be shown with the distance that makes it honest.
+    public let buoyReference: BuoyReference?
     /// 0...1 model agreement, or `nil` when no ensemble source was configured.
     public let confidence: Double?
     public let generatedAt: Date
+
+    /// Explicit rather than memberwise so `buoyReference` can default: a spot
+    /// with no station configured is a normal case, not a call-site burden.
+    public init(
+        spot: Spot,
+        hours: [HourlyForecast],
+        buoy: BuoyStatus,
+        buoyReference: BuoyReference? = nil,
+        confidence: Double? = nil,
+        generatedAt: Date
+    ) {
+        self.spot = spot
+        self.hours = hours
+        self.buoy = buoy
+        self.buoyReference = buoyReference
+        self.confidence = confidence
+        self.generatedAt = generatedAt
+    }
 
     /// The best remaining window today, in local beach time.
     ///
@@ -184,6 +205,9 @@ public actor ForecastRepository {
             spot: spot,
             hours: hours,
             buoy: await buoyTask,
+            buoyReference: spot.buoyStationID
+                .flatMap { IsramarClient.stations[$0] }
+                .map { IsramarClient.reference(for: $0, from: spot) },
             confidence: await confidenceTask,
             generatedAt: clock()
         )

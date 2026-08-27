@@ -170,6 +170,15 @@ enum ClockText {
         return HebrewText.timeRange(hourMinute(start), shown)
     }
 
+    /// Short weekday, for a chart axis where the full name will not fit.
+    static func weekdayShortHebrew(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeZone = TimeZone(identifier: "Asia/Jerusalem")
+        formatter.locale = Locale(identifier: "he_IL")
+        formatter.dateFormat = "EEEEE"
+        return formatter.string(from: date)
+    }
+
     static func weekdayHebrew(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.timeZone = TimeZone(identifier: "Asia/Jerusalem")

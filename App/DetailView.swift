@@ -242,9 +242,17 @@ struct DetailView: View {
                 Text("\(HebrewText.height(reading.significantWaveHeightMeters, unit: unit)) · \(HebrewText.ltr(String(format: "%.1f", reading.peakPeriodSeconds))) שניות")
                     .font(SurfFont.cardTitle)
                     .foregroundStyle(theme.text1)
-                Text("נמדד \(reading.age().ageInWordsHebrew) · תחנת \(reading.stationID)")
+                Text("נמדד \(reading.age().ageInWordsHebrew) · \(model.state(for: spot.id).value?.buoyReference?.hebrewSummary ?? reading.stationID)")
                     .font(SurfFont.meta)
                     .foregroundStyle(theme.text2)
+                if let reference = model.state(for: spot.id).value?.buoyReference, !reference.isLocal {
+                    // The reading validates the open-sea model rather than this
+                    // break. Saying so is what makes showing it defensible.
+                    Text("מדידה אזורית — מאמתת את המודל בים הפתוח, לא את הגלים בחוף הזה.")
+                        .font(SurfFont.meta)
+                        .foregroundStyle(theme.text2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             case .stale(_, let age):
                 Text("המצוף אינו מדווח")
                     .font(SurfFont.cardTitle)
@@ -254,7 +262,7 @@ struct DetailView: View {
                     .foregroundStyle(theme.text2)
                     .fixedSize(horizontal: false, vertical: true)
             case .unavailable:
-                Text("אין מצוף בקרבת החוף")
+                Text("אין מדידה זמינה")
                     .font(SurfFont.meta)
                     .foregroundStyle(theme.text2)
             }

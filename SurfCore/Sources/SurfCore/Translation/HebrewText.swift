@@ -43,6 +43,20 @@ public enum CompassPoint: String, Sendable, Equatable, CaseIterable {
         }
     }
 
+    /// The noun form, for "52 km to the north" rather than "a northerly wind".
+    public var hebrewNoun: String {
+        switch self {
+        case .north: return "צפון"
+        case .northEast: return "צפון-מזרח"
+        case .east: return "מזרח"
+        case .southEast: return "דרום-מזרח"
+        case .south: return "דרום"
+        case .southWest: return "דרום-מערב"
+        case .west: return "מערב"
+        case .northWest: return "צפון-מערב"
+        }
+    }
+
     public var english: String {
         switch self {
         case .north: return "N"

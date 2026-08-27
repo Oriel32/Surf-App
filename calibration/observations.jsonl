@@ -1,1 +1,5 @@
 {"stationID":"hadera","buoyHeightMeters":0.61,"buoyPeakPeriodSeconds":6.5,"spotID":"hadera","modelOpenSeaHeightMeters":0.56,"observedAt":"2026-08-26T17:00:00Z","recordedAt":"2026-08-26T18:11:59Z","modelPeriodSeconds":6.3}
+{"modelPeriodSeconds":6.3,"buoyHeightMeters":0.52,"buoyPeakPeriodSeconds":6.2,"recordedAt":"2026-08-27T10:54:43Z","stationID":"hadera","observedAt":"2026-08-27T10:00:00Z","spotID":"hadera","modelOpenSeaHeightMeters":0.56}
+{"buoyHeightMeters":0.52,"modelOpenSeaHeightMeters":0.56,"spotID":"hadera","observedAt":"2026-08-27T10:00:00Z","modelPeriodSeconds":6.3,"buoyPeakPeriodSeconds":6.2,"stationID":"hadera","recordedAt":"2026-08-27T10:58:16Z"}
+{"spotID":"hadera","recordedAt":"2026-08-27T11:00:10Z","observedAt":"2026-08-27T10:00:00Z","buoyHeightMeters":0.52,"buoyPeakPeriodSeconds":6.2,"modelPeriodSeconds":6.3,"modelOpenSeaHeightMeters":0.56,"stationID":"hadera"}
+{"stationID":"hadera","modelPeriodSeconds":6.3,"observedAt":"2026-08-27T10:00:00Z","modelOpenSeaHeightMeters":0.6,"buoyPeakPeriodSeconds":6.2,"spotID":"bat-yam","buoyHeightMeters":0.52,"recordedAt":"2026-08-27T11:11:17Z"}
