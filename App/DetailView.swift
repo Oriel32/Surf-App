@@ -15,12 +15,39 @@ struct DetailView: View {
     let day: Date
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// One selection behind both charts, so scrubbing either one marks the same
+    /// hour on the other. The score curve and the height curve are two views of
+    /// a single hour, and letting them disagree about which hour is being read
+    /// would defeat the point of showing them together.
+    @State private var selectedTime: Date?
 
     private var theme: Theme { Theme.current(colorScheme) }
     private var unit: HeightUnit { model.settings.heightUnit }
 
     private var hours: [HourlyForecast] {
         model.hours(for: spot.id, on: day)
+    }
+
+    private var selectedHour: HourlyForecast? {
+        ChartScrub.hour(at: selectedTime, in: hours)
+    }
+
+    /// A faint band, and never the only thing carrying the meaning — the word
+    /// travels with it in `NightLegend`.
+    private var nightTint: Color { theme.text2.opacity(0.16) }
+
+    /// An explicit y domain for the height chart.
+    ///
+    /// Needed so the night band can be drawn against a known scale, and worth
+    /// having anyway: an automatic domain rescales between days, which makes two
+    /// days of very different size draw curves of identical height.
+    private var heightDomainMax: Double {
+        let peak = hours
+            .map { max($0.conditions.waveHeightMeters, $0.conditions.openSeaHeightMeters) }
+            .max() ?? 1
+        return max(unit.convert(fromMeters: peak) * 1.15, unit.convert(fromMeters: 0.5))
     }
 
     private var representative: HourlyForecast? {
@@ -38,6 +65,7 @@ struct DetailView: View {
                     LoadingSection(theme: theme)
                 } else {
                     scoreChart
+                    if let hour = explainedHour { scoreBreakdown(hour) }
                     heightChart
                     if let hour = representative {
                         periodCard(hour)
@@ -61,7 +89,11 @@ struct DetailView: View {
 
     private var scoreChart: some View {
         AnalyticalCard(title: "ציון לאורך היום", theme: theme) {
+            ScrubCallout(hour: selectedHour, emphasis: .score, heightUnit: unit, theme: theme)
+
             Chart {
+                NightShading(hours: hours, yRange: 0...100, colour: nightTint)
+
                 ForEach(hours, id: \.conditions.timestamp) { hour in
                     AreaMark(
                         x: .value("שעה", hour.conditions.timestamp),
@@ -76,9 +108,24 @@ struct DetailView: View {
                     .foregroundStyle(Aqua.aqua600)
                     .interpolationMethod(.monotone)
                 }
+
+                if let selectedHour {
+                    ScrubMarker(
+                        hour: selectedHour,
+                        value: Double(selectedHour.score.value),
+                        tint: ScoreBand.band(forScore: selectedHour.score.value).colorToken.color,
+                        ruleColour: theme.text2.opacity(0.45)
+                    )
+                }
             }
+            .chartXSelection(value: $selectedTime)
             .chartYScale(domain: 0...100)
             .frame(height: 150)
+            .appearsGently(reduceMotion)
+            // One tick per hour crossed, not one per pixel of travel.
+            .sensoryFeedback(.selection, trigger: selectedHour?.conditions.timestamp)
+
+            NightLegend(theme: theme)
         }
     }
 
@@ -88,7 +135,11 @@ struct DetailView: View {
     private var heightChart: some View {
         AnalyticalCard(title: "גובה: בחוף מול ים פתוח", theme: theme) {
             VStack(alignment: .leading, spacing: 10) {
+                ScrubCallout(hour: selectedHour, emphasis: .height, heightUnit: unit, theme: theme)
+
                 Chart {
+                    NightShading(hours: hours, yRange: 0...heightDomainMax, colour: nightTint)
+
                     ForEach(hours, id: \.conditions.timestamp) { hour in
                         LineMark(
                             x: .value("שעה", hour.conditions.timestamp),
@@ -107,14 +158,28 @@ struct DetailView: View {
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 3]))
                         .interpolationMethod(.monotone)
                     }
+
+                    if let selectedHour {
+                        ScrubMarker(
+                            hour: selectedHour,
+                            value: unit.convert(fromMeters: selectedHour.conditions.waveHeightMeters),
+                            tint: Aqua.aqua600,
+                            ruleColour: theme.text2.opacity(0.45)
+                        )
+                    }
                 }
+                .chartXSelection(value: $selectedTime)
+                .chartYScale(domain: 0...heightDomainMax)
                 .frame(height: 150)
+                .appearsGently(reduceMotion)
+                .sensoryFeedback(.selection, trigger: selectedHour?.conditions.timestamp)
 
                 // Drawn by hand rather than left to the automatic legend, so
                 // each series keeps the colour it was assigned above.
                 HStack(spacing: 16) {
                     LegendSwatch(colour: Aqua.aqua600, label: "בחוף", dashed: false, theme: theme)
                     LegendSwatch(colour: theme.text2, label: "ים פתוח", dashed: true, theme: theme)
+                    NightLegend(theme: theme)
                 }
 
                 Text("מקדם החשיפה של \(spot.nameHebrew) הוא \(HebrewText.ltr(String(format: "%.2f", spot.exposureCoefficient))) — זה הפער בין שני הקווים.")
@@ -123,6 +188,100 @@ struct DetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// The hour the breakdown explains: whichever one the finger is on, falling
+    /// back to the hour the rest of the screen describes. Scrubbing the curve
+    /// therefore re-explains the score as it moves, which is the whole reason to
+    /// put the two next to each other.
+    private var explainedHour: HourlyForecast? {
+        selectedHour ?? representative
+    }
+
+    /// Why the score is what it is.
+    ///
+    /// `MatchScore.components` has been computed since the engine was written
+    /// and read by nothing — the score arrived on screen as an assertion. Every
+    /// factor is a normalised 0-1 multiplier, so the smallest bar is literally
+    /// the thing costing the most, and the sentence underneath names it.
+    private func scoreBreakdown(_ hour: HourlyForecast) -> some View {
+        let explanation = Translator.explain(hour.score)
+        let band = ScoreBand.band(forScore: hour.score.value)
+
+        return AnalyticalCard(title: "ממה מורכב הציון", theme: theme) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(HebrewText.ltr(String(hour.score.value)))
+                    .font(SurfFont.headline)
+                    .foregroundStyle(band.colorToken.color)
+                Text(band.hebrew)
+                    .font(SurfFont.cardTitle)
+                    .foregroundStyle(theme.text1)
+                Spacer(minLength: 0)
+                Text(ClockText.hourMinute(hour.conditions.timestamp))
+                    .font(SurfFont.meta)
+                    .foregroundStyle(theme.text2)
+            }
+
+            ForEach(explanation.factors, id: \.component) { factor in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(factor.hebrew)
+                            .font(SurfFont.label)
+                            // The limiting row carries the word too, not only
+                            // the warm tint — greyscale must lose nothing.
+                            .foregroundStyle(factor.isLimiting ? Aqua.choppy : theme.text2)
+                        if factor.isLimiting {
+                            Text("מעכב")
+                                .font(SurfFont.label)
+                                .foregroundStyle(Aqua.choppy)
+                        }
+                        Spacer(minLength: 0)
+                        Text(HebrewText.ltr(String(Int((factor.value * 100).rounded()))))
+                            .font(SurfFont.label)
+                            .foregroundStyle(theme.text2)
+                    }
+                    ScoreBar(
+                        fraction: factor.value,
+                        tint: factor.isLimiting ? Aqua.choppy : Aqua.aqua600,
+                        theme: theme
+                    )
+                }
+                .padding(.top, 2)
+            }
+
+            if let sentence = explanation.limitingSentenceHebrew {
+                Text(sentence)
+                    .font(SurfFont.meta)
+                    .foregroundStyle(theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+            } else {
+                Text("שום גורם לא מושך את הציון למטה בשעה הזו.")
+                    .font(SurfFont.meta)
+                    .foregroundStyle(theme.text2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+            }
+
+            Text("כל גורם הוא מכפיל בין 0 ל-100. הציון הוא המכפלה שלהם, ולכן הגורם הנמוך ביותר הוא זה שעולה הכי הרבה.")
+                .font(SurfFont.label)
+                .foregroundStyle(theme.text2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(breakdownLabel(hour, explanation))
+    }
+
+    private func breakdownLabel(
+        _ hour: HourlyForecast,
+        _ explanation: ScoreExplanation
+    ) -> String {
+        var parts = ["ממה מורכב הציון", "ציון \(hour.score.value)"]
+        parts.append(contentsOf: explanation.factors.map {
+            "\($0.hebrew) \(Int(($0.value * 100).rounded()))"
+        })
+        if let sentence = explanation.limitingSentenceHebrew { parts.append(sentence) }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Cards

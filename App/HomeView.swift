@@ -7,6 +7,7 @@ import SurfCore
 struct HomeView: View {
     @Bindable var model: AppModel
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showingSettings = false
 
     private var theme: Theme { Theme.current(colorScheme) }
@@ -18,6 +19,10 @@ struct HomeView: View {
                     stateContent
                 }
                 .padding(16)
+                // Loading → loaded → stale are state transitions, which is
+                // exactly what the motion policy allows animating. The numbers
+                // inside them are not.
+                .animation(Motion.standard(reduceMotion), value: model.selectedState.isLoading)
             }
             .background(theme.page.ignoresSafeArea())
             .navigationTitle(model.selectedSpot?.nameHebrew ?? "גלאסי")
@@ -62,12 +67,29 @@ struct HomeView: View {
         if let hour = model.currentHour {
             ForEach(hour.alerts, id: \.kind.rawValue) { alert in
                 SafetyBanner(alert: alert, theme: theme)
+                    // Slides in from above, where it already sits in the
+                    // hierarchy. It is never given a removal animation that
+                    // could let it fade out while the hazard still holds.
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
-            HeroSection(hour: hour, heightUnit: model.settings.heightUnit, theme: theme)
+            .animation(Motion.alert(reduceMotion), value: hour.alerts.map(\.kind.rawValue))
+
+            // The hero is also a way into Layer 2: the score is the number a
+            // sceptic wants explained, so tapping it opens the breakdown.
+            if let spot = model.selectedSpot {
+                NavigationLink {
+                    DetailView(model: model, spot: spot, day: Date())
+                } label: {
+                    HeroSection(hour: hour, heightUnit: model.settings.heightUnit, theme: theme)
+                }
+                .buttonStyle(.plain)
+            } else {
+                HeroSection(hour: hour, heightUnit: model.settings.heightUnit, theme: theme)
+            }
         }
 
         BestWindowSection(window: forecast.bestWindowToday, theme: theme)
-        HourlyStrip(hours: model.today, theme: theme)
+        HourlyStrip(hours: model.today, window: forecast.bestWindowToday, theme: theme)
 
         if model.settings.showBuoy {
             BuoySection(

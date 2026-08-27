@@ -156,7 +156,11 @@ final class AppModel {
     /// Per-day best windows. Never a daily mean: a day that is glassy at dawn
     /// and blown out by noon averages to a number that is wrong at every hour
     /// it claims to describe.
-    func days(for spotID: String) -> [(day: Date, window: SessionWindow?, peakScore: Int, isStarred: Bool)] {
+    ///
+    /// Each `DayOutlook` carries the hour its score came from, so the Week row
+    /// draws its height, slang and wind from that same hour rather than picking
+    /// its own maximum and describing a different one.
+    func days(for spotID: String) -> [DayOutlook] {
         guard let forecast = state(for: spotID).value else { return [] }
         return WindowFinder.dailyWindows(in: forecast.hours)
     }

@@ -121,6 +121,68 @@ extension View {
     }
 }
 
+// MARK: - Motion
+
+/// Restrained by policy. This is a decision tool used at dawn, not an
+/// entertainment surface.
+///
+/// claude.md draws the line precisely: animate state transitions and the score
+/// arriving; **never animate the wave data itself**. A height that slides into
+/// place reads as a height that is still changing, and a forecast that looks
+/// unsettled is a forecast nobody acts on.
+///
+/// Every function returns an `Animation?` and every one of them returns `nil`
+/// under Reduce Motion, so honouring the setting is the default rather than
+/// something each call site has to remember.
+enum Motion {
+    /// Sections appearing, disappearing and swapping between the four data
+    /// states.
+    static func standard(_ reduced: Bool) -> Animation? {
+        reduced ? nil : .smooth(duration: 0.3)
+    }
+
+    /// The score landing. Slightly slower and springier than a state change,
+    /// because it is the one moment the app is allowed to feel like an answer.
+    static func arrival(_ reduced: Bool) -> Animation? {
+        reduced ? nil : .snappy(duration: 0.45)
+    }
+
+    /// The safety banner arriving. It may animate *in*; it must never animate
+    /// out from under someone while the hazard still holds.
+    static func alert(_ reduced: Bool) -> Animation? {
+        reduced ? nil : .snappy(duration: 0.25)
+    }
+}
+
+extension View {
+    /// Fades and lifts into place once, on first appearance.
+    ///
+    /// **Deliberately not a left-to-right wipe.** The app forces RTL for the
+    /// whole process, so a directional reveal runs either against the reading
+    /// order or against the time axis — and there is no answer to which of those
+    /// is correct, because both are real. A fade makes no directional claim, so
+    /// it cannot make the wrong one.
+    ///
+    /// This animates the chart *arriving*, never the data inside it changing.
+    func appearsGently(_ reduceMotion: Bool) -> some View {
+        modifier(GentleAppearance(reduceMotion: reduceMotion))
+    }
+}
+
+private struct GentleAppearance: ViewModifier {
+    let reduceMotion: Bool
+    @State private var shown = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown ? 0 : 8)
+            .onAppear {
+                withAnimation(Motion.standard(reduceMotion)) { shown = true }
+            }
+    }
+}
+
 // MARK: - Type
 
 /// `app_ui.md` asks for a geometric sans with rounded terminals. The named

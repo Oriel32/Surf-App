@@ -50,6 +50,7 @@ struct HeroSection: View {
     let theme: Theme
 
     @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var presentation: ConditionsPresentation {
         Translator.present(hour, heightUnit: heightUnit)
@@ -68,6 +69,12 @@ struct HeroSection: View {
                 Text(presentation.scoreText ?? "—")
                     .font(SurfFont.score)
                     .foregroundStyle(presentation.scoreToken?.color ?? theme.text2)
+                    // The score is the one number allowed to move: it counts
+                    // rather than cutting when the sport or the hour changes,
+                    // and its band colour crossfades with it. The wave data
+                    // beside it stays still, by policy.
+                    .contentTransition(.numericText(value: Double(hour.score.value)))
+                    .animation(Motion.arrival(reduceMotion), value: hour.score.value)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(presentation.scoreBand?.hebrew ?? "")
                         .font(SurfFont.cardTitle)
@@ -154,6 +161,60 @@ struct WindReadout: View {
                 .font(SurfFont.meta)
                 .foregroundStyle(theme.text2)
         }
+    }
+}
+
+/// A placeholder in the shape of the thing that is coming.
+///
+/// `Aqua.sand` is the art direction's skeleton colour and was already being used
+/// for this by hand in `SpotRow`; this is that, extracted so every screen fakes
+/// its layout the same way.
+/// The shimmer lives here rather than in a general-purpose modifier because the
+/// shape is only known here. Applied to a whole screen, a sweep lights up the
+/// gaps between the cards as well as the cards.
+@MainActor
+struct SkeletonBlock: View {
+    var width: CGFloat?
+    var height: CGFloat = 12
+    let theme: Theme
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Travelling `UnitPoint`s rather than a measured offset: they are
+    /// animatable and scale-free, so the sweep crosses the block correctly
+    /// without a `GeometryReader` to tell it how wide the block is.
+    @State private var sweepStart = UnitPoint(x: -1.2, y: 0.5)
+    @State private var sweepEnd = UnitPoint(x: -0.2, y: 0.5)
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: min(height / 2, 14), style: .continuous)
+    }
+
+    var body: some View {
+        shape
+            .fill(Aqua.sand.opacity(theme.isDark ? 0.22 : 0.45))
+            .overlay {
+                if !reduceMotion {
+                    LinearGradient(
+                        colors: [.clear, .white.opacity(0.30), .clear],
+                        startPoint: sweepStart,
+                        endPoint: sweepEnd
+                    )
+                    .blendMode(.plusLighter)
+                }
+            }
+            .clipShape(shape)
+            .frame(width: width, height: height)
+            .onAppear {
+                // Reduce Motion leaves the static sand tint, which is a
+                // complete loading state on its own rather than a degraded one.
+                guard !reduceMotion else { return }
+                withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) {
+                    sweepStart = UnitPoint(x: 1.2, y: 0.5)
+                    sweepEnd = UnitPoint(x: 2.2, y: 0.5)
+                }
+            }
+            .accessibilityHidden(true)
     }
 }
 

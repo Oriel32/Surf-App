@@ -117,11 +117,14 @@ struct SpotRow: View {
                         .foregroundStyle(theme.text2)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
-                    HStack(spacing: 7) {
+                    // The same arrow-word-knots readout Home and Week use. The
+                    // relation word alone said which way the wind blew but not
+                    // how hard, which is half the fact.
+                    WrappingRow {
                         SeaStateChip(word: presentation.seaStateHebrew, token: presentation.seaStateToken)
-                        Text(presentation.windRelationHebrew)
-                            .font(SurfFont.label)
-                            .foregroundStyle(theme.text2)
+                        if let hour {
+                            WindReadout(presentation: presentation, hour: hour, theme: theme)
+                        }
                     }
                 } else {
                     placeholder
@@ -159,17 +162,18 @@ struct SpotRow: View {
                 .font(SurfFont.meta)
                 .foregroundStyle(Aqua.choppy)
         default:
-            // Sand is the art direction's skeleton colour.
-            Capsule()
-                .fill(Aqua.sand.opacity(theme.isDark ? 0.25 : 0.5))
-                .frame(width: 120, height: 10)
-                .accessibilityHidden(true)
+            SkeletonBlock(width: 120, height: 10, theme: theme)
         }
     }
 
     private var rowLabel: String {
         guard let hour, let presentation else { return "\(spot.nameHebrew), טוען" }
-        var parts = [spot.nameHebrew, "ציון \(hour.score.value)", presentation.bandHebrew]
+        var parts = [
+            spot.nameHebrew,
+            "ציון \(hour.score.value)",
+            presentation.bandHebrew,
+            presentation.windSpokenHebrew
+        ]
         if !hour.alerts.isEmpty { parts.append("אזהרת בטיחות") }
         if isFavourite { parts.append("מועדף") }
         return parts.joined(separator: ", ")
