@@ -297,3 +297,172 @@ documented at `ScoreTuning.swift:58`.
 - `surf_research.md` is deliberately **not** edited. It is the research record
   and should keep saying what the research said; `claude.md` now states that it
   overrides the doc on this table, and why.
+
+---
+
+## Observation #3 — 2026-08-29, a session in the water
+
+The first entry in this ledger measured against a **person**, not against
+another forecast. A surfer at Bat Yam reported, from the water:
+
+> Today 29.8, I went to surf at 9:30 at Bat Yam beach. The waves were being
+> built at around 10:00 but with a little bit of current and wind that made the
+> sea bit choppy and wavy, but every few minutes there were good waves that were
+> built about 7 meters from the surfline. At around 10:20 the current and the
+> wind became much higher and the conditions were not very good — wavy sea with
+> lot of current and disorganized waves.
+
+Reproduce with `swift run smoke bat-yam surfing intermediate --at 2026-08-29T10:00`.
+The `--at` flag was added for this: the tool could previously only report on the
+current hour, so a field report could never be checked against the engine.
+
+### What we said at the time
+
+| Hour | beach | period | sea state | band | score |
+|---|---|---|---|---|---|
+| 09:00 | 0.62 m | 7.0 s | `סביר` | קרסול | 51 |
+| 10:00 | 0.65 m | 7.7 s | `סביר` | קרסול | 55 |
+| 11:00 | 0.66 m | 7.7 s | `סביר` | קרסול | ~30 |
+| 12:00 | 0.68 m | 7.7 s | `צ׳ופי` | קרסול | — |
+
+Peak window for the day: **07:00–11:00, score 59** — a recommendation that
+expires at the hour the session became unsurfable.
+
+### Finding 3.1 — every headline number moved the wrong way
+
+Beach height *rose* 0.62 → 0.66 m and the period *rose* 7.0 → 7.7 s through a
+session the surfer watched come apart. Neither is a bug in the arithmetic. The
+height is the quadrature sum of both trains, so building chop raises it; the
+period is read off the dominant train, and the swell stayed the taller of the
+two the whole morning. Both numbers were true and the impression they gave was
+false — the failure mode `claude.md` opens by naming.
+
+The split behind them, at the break:
+
+| Hour | swell | chop | total | chop share | wind | gust |
+|---|---|---|---|---|---|---|
+| 07:00 | 0.583 | 0.115 | 0.594 | 3.7% | 4.7 kt | 9.1 |
+| 08:00 | 0.583 | 0.161 | 0.604 | 7.1% | 6.3 kt | 12.2 |
+| 09:00 | 0.583 | 0.208 | 0.619 | 11.3% | 8.0 kt | 15.6 |
+| **10:00** | 0.590 | 0.280 | 0.653 | **18.4%** | 9.0 kt | 17.7 |
+| **11:00** | 0.574 | 0.322 | 0.658 | **23.9%** | 10.6 kt | 20.8 |
+| 12:00 | 0.557 | 0.397 | 0.684 | 33.7% | 12.4 kt | 24.3 |
+
+The rideable swell was flat to falling. The entire rise in the displayed number
+was 2.5-second slop.
+
+### Finding 3.2 — the wind never looked like the problem
+
+Mean wind ran 8.0 → 10.6 kt, inside the `0-10 kt weak — surf/SUP ideal` band for
+almost the whole session, veering 193° → 223°. 15-minutely: 8.5 kt at 09:30,
+9.7 kt at 10:30, crossing 10 kt only at about 10:40. Nothing keyed to mean speed
+could have fired.
+
+Two things did change and neither was being read: the **gust** reached 17.7 kt by
+10:00 (ratio ~1.96), and the **onshore component** of the wind more than doubled,
+2.5 → 5.4 kt, while the mean barely moved.
+
+### Finding 3.3 — the share at the beach is not the share offshore
+
+Open-sea chop shares that morning were 18% / 28% / 37%. At the break they are
+11% / 18% / 24%. A 7.65 s swell shoals up over a 2 m bar and a 2.45 s chop does
+not, so the transform *cleans* the sea by about a third.
+
+This matters for anyone setting a threshold: keyed to the open-sea number, a
+"choppy" rule fires an hour early. `SpotConditions.windSeaEnergyShare` is
+therefore computed after the transform, not at ingest.
+
+### Finding 3.4 — the two trains were opposed
+
+Swell from 290°, 20° north of the 270° normal. Chop from 220-229°, 41-50° south
+of it. They drive longshore current in opposite directions, which is confused
+water rather than merely lumpy water — the "disorganized waves" of the report.
+No scalar the engine carried could express it.
+
+### Finding 3.5 — the calibration log was recording a false bias
+
+Smoke printed `model 1.10 m vs buoy 0.64 m — MODEL AND BUOY DISAGREE (+0.46 m)`
+and wrote that gap to this ledger.
+
+It is not a model error. Pulling Open-Meteo **at the Hadera buoy's own
+coordinates** for the same hour:
+
+| | combined | swell partition | buoy |
+|---|---|---|---|
+| 13:00 local | 1.08 m | **0.66 m @ 5.95 s** | **0.64 m @ 6.5 s** |
+
+The swell channel agrees to **2 cm**. The whole discrepancy is the wind-sea
+partition — the same conclusion finding 1.1 reached from GoSurf's swell column,
+now reached independently from the buoy. A model's combined `wave_height` and an
+ISRAMAR significant height are not the same quantity.
+
+Left alone, thirty of these would have produced a "height bias" of about +0.45 m
+and `suggestedHeightCorrection` would have proposed shrinking every spot's
+exposure coefficient by roughly a third to cancel an error the transform never
+made.
+
+### Changes made
+
+- **H.** `SpotConditions` carries `swellHeightMeters`, `windSeaHeightMeters`,
+  `windSeaEnergyShare` and `isCrossSea`. The transform already computed all of
+  it per train and discarded it. Displayed height and the slang band are
+  **unchanged** — they remain the combined sea, so nothing in rounds 1-2 moves.
+- **I.** `SeaStateRules` gains `chopEnergyShare = 0.18` and `gustChopKnots = 18`,
+  and `SeaStateClassifier` reads the partition and the gust. First choppy hour
+  moves from 12:00 to **10:00**. The glassy short-circuit deliberately stays
+  ahead of both, so the hero state is untouched.
+- **J.** `ScoreTuning.surfing` gains a `chopShare` curve and `chopFloor = 0.30`,
+  emitted as a `chop` component. Before this the 10:00 → 11:00 fall came entirely
+  from the wind relation crossing a bin boundary, which happened to land on the
+  right hour here and would not on a day the wind held its bearing.
+- **K.** New `LongshoreCurrent` — Longuet-Higgins per train, signed by side of
+  the normal, plus alongshore wind drift. Surfaced as a readout and wired to the
+  **SUP score only**. Not a safety alert: the offshore-drift banner keeps its
+  monopoly, and a second, more frequent alert is how people learn to ignore the
+  first. **Magnitude is provisional** — one session cannot validate it, and this
+  one is a poor calibration case because the opposed trains partly cancel.
+- **L.** `CalibrationRecord` gains `modelSwellHeightMeters` /
+  `modelSwellPeriodSeconds`, and `suggestedHeightCorrection` now refuses to
+  answer until 30 records carry a partition, measuring against the swell channel
+  when they do.
+- **M.** The ledger path was **CWD-relative**. Running smoke from `SurfCore/`
+  silently created a second history at `SurfCore/calibration/observations.jsonl`.
+  Now anchored to the repo via `#filePath`.
+- **N.** `--at` must not write to the ledger unless the model hour and the buoy
+  reading are the same hour. ISRAMAR serves only its latest measurement, so
+  asking for 09:00 in the afternoon paired a morning forecast against an
+  afternoon observation — and the first seven records this session produced were
+  exactly that, discarded before they reached the file. The comparison is still
+  printed and labelled; only the *logging* is gated, at one hour.
+
+### Result
+
+09:00 `סביר`, **10:00 `צ׳ופי`**, 11:00 `צ׳ופי` — the first choppy hour is now the
+hour it was called choppy from the water.
+
+Live at 14:00 on the day, against the 12Z refresh: chop share 12% / 18% / 25%,
+scores **53 / 55 / 24**. The regression suite pins the earlier 06Z numbers it was
+written from, so the two differ by a point or two; what is asserted there is the
+shape, not the digits — 09:00 and 10:00 within six points of each other, and at
+least a fifteen-point fall into 11:00.
+
+Note what is *not* claimed: 09:00 → 10:00 does not fall. A first version of the
+regression test demanded a monotone decline and failed, and the report is why
+the test was wrong rather than the engine — at 10:00 there were still "good waves
+every few minutes", the sea was bigger and longer-period as well as choppier,
+and those genuinely trade off. The collapse is reported at **10:20**, between two
+model hours. What had to move, and does, is 10:00 → 11:00.
+
+### Still open
+
+- **Everything in K is n=1.** The current model needs more logged sessions before
+  its magnitude means anything, and it must not reach the surfing score or an
+  alert until then.
+- **Does GoSurf's `גובה` column show the combined sea or the swell?** Today would
+  discriminate it — the two differ by about 10 cm at Bat Yam — where every
+  light-wind day already in this ledger cannot. Not captured on the day.
+- The `fair` / `סביר` state still has no home in `claude.md` or the research, and
+  its source comment still says "confirm the wording". Now load-bearing: it is
+  the state that 09:00 lands in.
+- Nothing here revisits the round-2 band table, the break point, or the exposure
+  coefficient. This round changed what the engine can *see*, not what it names.

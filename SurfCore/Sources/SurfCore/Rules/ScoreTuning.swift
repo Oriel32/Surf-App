@@ -148,6 +148,28 @@ enum ScoreTuning {
         /// raggedest wind leaves over half the score standing.
         let gustFloor = 0.55
 
+        /// How clean the sea is, from the share of its energy that is local wind
+        /// chop rather than swell. 1.0 is pure groundswell.
+        ///
+        /// This is the term that was missing on 2026-08-29 at Bat Yam. Every
+        /// other input said the morning was steady or improving — reported height
+        /// rose 0.62 → 0.66 m, and the period rose 7.0 → 7.7 s because it is read
+        /// off the dominant train and the swell stayed dominant — while a surfer
+        /// in the water watched it fall apart. What changed was the mixture: the
+        /// chop went from 11% of the energy at the break to 24%.
+        ///
+        /// Flat to 0.15, which is an ordinary trace of wind sea that costs
+        /// nothing, and gone by 0.50, where half the sea is locally generated
+        /// slop and the swell is buried in it.
+        let chopShare = Trapezoid(riseStart: -1, plateauStart: 0, plateauEnd: 0.15, fallEnd: 0.50)
+
+        /// Chop spoils a session; it does not delete the swell underneath. A sea
+        /// that is more chop than swell still keeps a third of its wave quality —
+        /// the groundswell is still arriving, and on a small day the chop is the
+        /// difference between mediocre and pointless rather than between surfing
+        /// and not.
+        let chopFloor = 0.30
+
         let wind = RelationCurves(
             // A light offshore is the best wind a surfer can get; a hard one
             // holds the wave up until it will not break at all.
@@ -219,6 +241,22 @@ enum ScoreTuning {
         let flatness = Trapezoid(riseStart: -1, plateauStart: 0, plateauEnd: 0.3, fallEnd: 0.9)
         let wind = Trapezoid(riseStart: -1, plateauStart: 0, plateauEnd: 6, fallEnd: 14)
         let windFloor = 0.3
+
+        /// Longshore current in m/s, and the one sport where it decides the
+        /// session rather than merely annoying it.
+        ///
+        /// A paddler stands up, catches the wind, and is carried down the beach
+        /// by water they cannot out-paddle for long; a surfer sitting in the same
+        /// current is inconvenienced. Flat to 0.25 m/s, a drift a paddler
+        /// corrects without thinking, and gone by 0.80, which is a walk back up
+        /// the beach.
+        ///
+        /// Applied to SUP alone for now. Deliberately NOT wired to the surfing
+        /// score or to a safety alert: `LongshoreCurrent` calls its own magnitude
+        /// provisional, and one session is not enough to start moving the number
+        /// the whole product leads with.
+        let current = Trapezoid(riseStart: -1, plateauStart: 0, plateauEnd: 0.25, fallEnd: 0.80)
+        let currentFloor = 0.25
     }
 
     static let sup = StandUpPaddle()

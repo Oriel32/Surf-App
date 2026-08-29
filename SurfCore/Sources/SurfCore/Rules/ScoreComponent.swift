@@ -20,6 +20,10 @@ public enum ScoreComponent: String, Sendable, Equatable, CaseIterable {
     case energy
     case size
     case shape
+    /// How much of the sea is swell rather than local wind chop. Distinct from
+    /// `shape`, which reads the dominant train's period and therefore cannot see
+    /// chop building underneath a swell that is still the taller of the two.
+    case chop
     case wind
     case gust
     // Kite and wing foil.
@@ -27,6 +31,9 @@ public enum ScoreComponent: String, Sendable, Equatable, CaseIterable {
     case height
     // SUP.
     case flatness
+    /// Longshore current — water moving along the beach, which a paddler fights
+    /// and a surfer merely notices.
+    case current
 
     public var hebrew: String {
         switch self {
@@ -36,11 +43,13 @@ public enum ScoreComponent: String, Sendable, Equatable, CaseIterable {
         // here it is whether that power arrives as a wave that stands up and
         // peels, which is what a surfer means by shape.
         case .shape: return "צורת הגל"
+        case .chop: return "ניקיון הים"
         case .wind: return "רוח"
         case .gust: return "יציבות הרוח"
         case .direction: return "כיוון הרוח"
         case .height: return "גובה"
         case .flatness: return "שקט"
+        case .current: return "זרם"
         }
     }
 
@@ -54,11 +63,13 @@ public enum ScoreComponent: String, Sendable, Equatable, CaseIterable {
         case .energy: return "אין מספיק אנרגיה בים — זה מה שמעכב."
         case .size: return "הגלים קטנים מדי — זה מה שמעכב."
         case .shape: return "המחזור קצר והגלים לא מסתדרים — זה מה שמעכב."
+        case .chop: return "יש הרבה ים מקומי מעל הסוואל — זה מה שמעכב."
         case .wind: return "הרוח היא מה שמעכב."
         case .gust: return "הרוח משתנה ומשברת את פני המים — זה מה שמעכב."
         case .direction: return "כיוון הרוח הוא מה שמעכב."
         case .height: return "גובה הגלים הוא מה שמעכב."
         case .flatness: return "הים גלי מדי לסאפ — זה מה שמעכב."
+        case .current: return "יש זרם חזק לאורך החוף — זה מה שמעכב."
         }
     }
 
@@ -69,9 +80,9 @@ public enum ScoreComponent: String, Sendable, Equatable, CaseIterable {
     /// because the wind is the session and the sea is a condition on it.
     public static func order(for sport: Sport) -> [ScoreComponent] {
         switch sport {
-        case .surfing: return [.energy, .size, .shape, .wind, .gust]
+        case .surfing: return [.energy, .size, .shape, .chop, .wind, .gust]
         case .kitesurfing, .wingFoil: return [.wind, .direction, .height]
-        case .sup: return [.flatness, .wind]
+        case .sup: return [.flatness, .wind, .current]
         }
     }
 }

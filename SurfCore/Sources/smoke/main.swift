@@ -11,7 +11,8 @@ import FoundationNetworking
 // The unit suite proves the logic is self-consistent. This proves the decoders
 // match what the providers actually send, which no fixture can.
 //
-//   swift run smoke [spot-id] [surfing|kitesurfing|wingFoil|sup] [beginner|intermediate|advanced] [--explain]
+//   swift run smoke [spot-id] [surfing|kitesurfing|wingFoil|sup] [beginner|intermediate|advanced]
+//                    [--explain] [--today] [--at <yyyy-MM-ddTHH:mm, Israel time>]
 //
 // --explain prints every intermediate value of the wave transformation, which is
 // what makes a disagreement with another forecast app diagnosable rather than
@@ -20,7 +21,65 @@ import FoundationNetworking
 let arguments = CommandLine.arguments
 let explain = arguments.contains("--explain")
 let todayTable = arguments.contains("--today")
-let positionalArgs = Array(arguments.dropFirst().filter { !$0.hasPrefix("--") })
+
+/// `--at <when>` reports on a chosen hour instead of the current one.
+///
+/// Added because a field report is always about a time that has already passed.
+/// On 2026-08-29 a surfer described a session between 09:30 and 10:20 at Bat Yam
+/// and this tool could not be pointed at it: the only way to check the engine
+/// against those hours was to have been running it during them. A verification
+/// tool that can only verify the present cannot close the operating loop.
+///
+/// Accepts a bare local hour as well as a full stamp, in Israel time, because
+/// nobody types a UTC offset from memory.
+func parseWhen(_ raw: String) -> Date? {
+    let formats = [
+        "yyyy-MM-dd'T'HH:mm:ssXXXXX",
+        "yyyy-MM-dd'T'HH:mm",
+        "yyyy-MM-dd HH:mm",
+        "yyyy-MM-dd'T'HH",
+        "yyyy-MM-dd"
+    ]
+    for format in formats {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "Asia/Jerusalem")
+        formatter.dateFormat = format
+        if let date = formatter.date(from: raw) { return date }
+    }
+    return nil
+}
+
+// One pass, so that the value belonging to `--at` is never mistaken for a
+// positional argument — it would otherwise be read as the spot id.
+//
+// Both results land in `let`s: a top-level `var` is main-actor isolated under
+// Swift 6 and cannot then be read from the nonisolated `positional` below.
+let (requestedHour, positionalArgs): (Date?, [String]) = {
+    var when: Date?
+    var positionals: [String] = []
+    var index = 1
+    while index < arguments.count {
+        let argument = arguments[index]
+        if argument == "--at" {
+            guard index + 1 < arguments.count else {
+                FileHandle.standardError.write(Data("--at needs a time, e.g. --at 2026-08-29T10:00\n".utf8))
+                exit(1)
+            }
+            let raw = arguments[index + 1]
+            guard let parsed = parseWhen(raw) else {
+                FileHandle.standardError.write(Data("--at: could not read '\(raw)' as a date\n".utf8))
+                exit(1)
+            }
+            when = parsed
+            index += 2
+            continue
+        }
+        if !argument.hasPrefix("--") { positionals.append(argument) }
+        index += 1
+    }
+    return (when, positionals)
+}()
 
 func positional(_ index: Int, default fallback: String) -> String {
     index < positionalArgs.count ? positionalArgs[index] : fallback
@@ -52,7 +111,6 @@ func hhmm(_ date: Date) -> String {
 func metres(_ value: Double) -> String { String(format: "%.2f m", value) }
 func seconds(_ value: Double) -> String { String(format: "%.1f s", value) }
 func knots(_ value: Double) -> String { String(format: "%.0f kt", value) }
-func kmh(_ knotsValue: Double) -> String { String(format: "%.0f km/h", knotsValue * 1.852) }
 
 // Foundation on Linux ignores the width in `%-10@`, so padding is done here
 // rather than in a format string.
@@ -156,13 +214,15 @@ guard !forecast.hours.isEmpty else {
 
 // MARK: - Now
 
-let now = Date()
+// The hour everything below reports on. `--at` selects a past or future hour;
+// without it, now.
+let now = requestedHour ?? Date()
 let current = forecast.hours.min {
     abs($0.conditions.timestamp.timeIntervalSince(now)) < abs($1.conditions.timestamp.timeIntervalSince(now))
 }!
 let c = current.conditions
 
-rule("RIGHT NOW  (\(clock(c.timestamp)))")
+rule((requestedHour == nil ? "RIGHT NOW  (" : "REQUESTED HOUR  (") + clock(c.timestamp) + ")")
 // What the user actually reads, straight from the translation layer rather than
 // re-formatted here. Printing a raw metre value instead was hiding the fact that
 // the product already quotes a range.
@@ -173,6 +233,21 @@ if c.isDepthLimited {
     print("  Depth-limited    : bar holds \(metres(c.breakingLimitMeters)); score sees \(metres(c.rideableHeightMeters))")
 }
 print("  Period           : \(seconds(c.periodSeconds))")
+// The split behind that single height. Printed next to it because the combined
+// number cannot say whether a rising sea is rising swell or rising chop, and
+// that distinction is the entire 2026-08-29 Bat Yam finding.
+if let swell = c.swellHeightMeters, let windSea = c.windSeaHeightMeters {
+    print("  Swell / chop     : \(metres(swell)) swell + \(metres(windSea)) chop"
+        + (c.windSeaEnergyShare.map { String(format: "   (chop = %.0f%% of the energy)", $0 * 100) } ?? ""))
+}
+if c.isCrossSea {
+    print("  Cross sea        : swell and chop from opposite sides of the normal — confused water")
+}
+if let currentMPS = c.longshoreCurrentMPS, abs(currentMPS) >= 0.05 {
+    let heading = currentMPS > 0 ? "toward \(Int(Compass.normalize(spot.shorelineNormalDegrees + 90)))°"
+                                 : "toward \(Int(Compass.normalize(spot.shorelineNormalDegrees - 90)))°"
+    print("  Longshore current: \(String(format: "%.2f m/s", abs(currentMPS))) \(heading)   [provisional]")
+}
 print("  Sea state        : \(c.seaState.hebrew)  /  \(c.seaState.english)")
 print("  Wind             : \(knots(c.windSpeedKnots)) \(c.windRelation.rawValue) (from \(Int(c.windDirectionDegrees))°)")
 if let water = c.seaSurfaceTemperatureC { print("  Water            : \(String(format: "%.1f °C", water))") }
@@ -258,7 +333,7 @@ if let window = forecast.bestWindowToday {
 // table so the two can be read side by side.
 if todayTable {
     rule("TODAY, HOUR BY HOUR")
-    print("  time   open-sea   beach     set ×\(String(format: "%.2f", WaveStatistics.oneInTen))  period   wind              sea state  band")
+    print("  time   open-sea   beach     set ×\(String(format: "%.2f", WaveStatistics.oneInTen))  period   chop   wind             sea state  band")
 
     let calendar = Calendar.israelStandard
     for hour in forecast.hours where calendar.isDate(hour.conditions.timestamp, inSameDayAs: now) {
@@ -269,7 +344,8 @@ if todayTable {
             + pad(metres(h.waveHeightMeters), 10)
             + pad(metres(set), 10)
             + pad(seconds(h.periodSeconds), 9)
-            + pad("\(kmh(h.windSpeedKnots)) \(h.windRelation.rawValue)", 18)
+            + pad(h.windSeaEnergyShare.map { String(format: "%.0f%%", $0 * 100) } ?? "—", 7)
+            + pad("\(knots(h.windSpeedKnots)) \(h.windRelation.rawValue)", 18)
             + pad(h.seaState.english, 11)
             + h.band.english)
     }
@@ -320,12 +396,57 @@ case .fresh(let reading):
     let delta = c.openSeaHeightMeters - reading.significantWaveHeightMeters
     print("  model open-sea same hour: \(metres(c.openSeaHeightMeters))")
     print("  delta: \(String(format: "%+.2f m", delta))  \(abs(delta) < 0.3 ? "— models agree with reality" : "— MODEL AND BUOY DISAGREE")")
+    // The combined sea and the swell partition compared separately, because a
+    // buoy disagreeing with the first while matching the second is a definition
+    // mismatch and not a model error — which is exactly what happened here on
+    // 2026-08-29 (combined +0.46 m, swell +0.02 m).
+    if let modelSwell = c.openSeaSwellHeightMeters {
+        let swellDelta = modelSwell - reading.significantWaveHeightMeters
+        print("  model swell only  : \(metres(modelSwell))"
+            + "   delta \(String(format: "%+.2f m", swellDelta))"
+            + "  \(abs(swellDelta) < 0.3 ? "— swell channel agrees" : "— swell channel disagrees too")")
+    }
     print("  period: model \(seconds(c.periodSeconds)) vs buoy \(seconds(reading.peakPeriodSeconds))"
         + "  \(String(format: "%+.1f s", c.periodSeconds - reading.peakPeriodSeconds))")
 
     // Keep the comparison instead of printing it and forgetting it. One run is
     // an anecdote; the series is what can actually tune a coefficient.
-    let logURL = URL(fileURLWithPath: "calibration/observations.jsonl")
+    //
+    // Only when the model hour and the buoy reading are actually the same hour.
+    // ISRAMAR serves one reading — the latest — so `--at` can pair a model value
+    // from this morning against a measurement taken this afternoon. Printing
+    // that comparison is fine and clearly labelled; *logging* it would put a
+    // fabricated pair into the record that coefficients get tuned from, which is
+    // the same class of mistake as the combined-versus-swell mismatch this log
+    // was just taught to avoid.
+    let hoursApart = abs(c.timestamp.timeIntervalSince(reading.observedAt)) / 3600
+
+    // Anchored to the repository, not to wherever the process happens to be
+    // standing. This was a real fork: running the tool from `SurfCore/` instead
+    // of the repo root silently created a SECOND ledger at
+    // `SurfCore/calibration/observations.jsonl`, so the history a coefficient
+    // would eventually be tuned against depended on which directory somebody
+    // typed the command in.
+    //
+    // `#filePath` is this source file at build time, four levels below the root:
+    // SurfCore/Sources/smoke/main.swift.
+    let repoRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()   // smoke
+        .deletingLastPathComponent()   // Sources
+        .deletingLastPathComponent()   // SurfCore
+        .deletingLastPathComponent()   // repo root
+    let logURL = repoRoot
+        .appendingPathComponent("calibration")
+        .appendingPathComponent("observations.jsonl")
+    guard hoursApart <= 1 else {
+        print("  not logged: this model hour is "
+            + String(format: "%.0f", hoursApart)
+            + "h from the buoy reading")
+        print("  (--at can outrun the buoy, which only ever serves its latest measurement)")
+        print("\nSMOKE_OK")
+        exit(0)
+    }
+
     do {
         try CalibrationLog.append(
             CalibrationRecord(
@@ -335,6 +456,8 @@ case .fresh(let reading):
                 observedAt: reading.observedAt,
                 modelOpenSeaHeightMeters: c.openSeaHeightMeters,
                 modelPeriodSeconds: c.periodSeconds,
+                modelSwellHeightMeters: c.openSeaSwellHeightMeters,
+                modelSwellPeriodSeconds: c.openSeaSwellPeriodSeconds,
                 buoyHeightMeters: reading.significantWaveHeightMeters,
                 buoyPeakPeriodSeconds: reading.peakPeriodSeconds
             ),

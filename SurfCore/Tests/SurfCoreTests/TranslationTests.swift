@@ -135,6 +135,77 @@ struct SeaStateTests {
         )
         #expect(state == .fair)
     }
+
+    @Test("Chop in the water reads as chop even when the mean wind looks ideal")
+    func partitionCanCallItChoppy() {
+        // The 2026-08-29 Bat Yam case in miniature: a 9-knot side-shore, which
+        // every mean-speed rule here calls fine, over a sea a fifth of whose
+        // energy is 2.5-second slop.
+        let state = SeaStateClassifier.classify(
+            heightMeters: 0.65,
+            windSpeedMPS: mps(knots: 9),
+            relation: .sideShore,
+            windSeaEnergyShare: 0.20
+        )
+        #expect(state == .choppy)
+
+        // Just under the threshold, the same hour is fair.
+        let cleaner = SeaStateClassifier.classify(
+            heightMeters: 0.65,
+            windSpeedMPS: mps(knots: 9),
+            relation: .sideShore,
+            windSeaEnergyShare: 0.11
+        )
+        #expect(cleaner == .fair)
+    }
+
+    @Test("A hard gust reads as chop before the sea has answered it")
+    func gustCanCallItChoppy() {
+        let state = SeaStateClassifier.classify(
+            heightMeters: 0.8,
+            windSpeedMPS: mps(knots: 9),
+            relation: .sideShore,
+            windGustMPS: mps(knots: 21)
+        )
+        #expect(state == .choppy)
+    }
+
+    @Test("An unpartitioned sea is not charged for a share nobody measured")
+    func absentPartitionChangesNothing() {
+        // A source that does not separate the trains must produce exactly the
+        // answer it did before the rule existed, rather than a guess.
+        let state = SeaStateClassifier.classify(
+            heightMeters: 0.8,
+            windSpeedMPS: mps(knots: 8),
+            relation: .onshore,
+            windSeaEnergyShare: nil
+        )
+        #expect(state == .fair)
+    }
+
+    @Test("Glass survives both new rules — the hero state is not collateral damage")
+    func glassyStillWins() {
+        // The glassy branch deliberately sits ahead of the chop rules. A calm
+        // morning with an old wind sea still running, and an offshore morning
+        // with a gusty land breeze, both stay `גלאסי`.
+        let calm = SeaStateClassifier.classify(
+            heightMeters: 0.8,
+            windSpeedMPS: mps(knots: 3),
+            relation: .onshore,
+            windSeaEnergyShare: 0.45,
+            windGustMPS: mps(knots: 22)
+        )
+        #expect(calm == .glassy)
+
+        let offshore = SeaStateClassifier.classify(
+            heightMeters: 0.8,
+            windSpeedMPS: mps(knots: 10),
+            relation: .offshore,
+            windSeaEnergyShare: 0.40,
+            windGustMPS: mps(knots: 25)
+        )
+        #expect(offshore == .glassy)
+    }
 }
 
 @Suite("Spot catalogue")

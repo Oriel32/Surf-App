@@ -54,6 +54,20 @@ public enum Compass {
         return wrapped < 0 ? wrapped + 360 : wrapped
     }
 
+    /// Which *side* of a reference bearing something sits on, -180...180.
+    ///
+    /// Positive is clockwise from the reference. `angularDistance` throws this
+    /// away, and for a shoreline the side is the whole question: two trains 20°
+    /// and 45° off the normal are a clean sea if they share a sign and a confused
+    /// one if they do not, and they drive longshore current in opposite
+    /// directions in the second case.
+    public static func signedOffset(_ bearing: Double, from reference: Double) -> Double {
+        let diff = normalize(bearing) - normalize(reference)
+        if diff > 180 { return diff - 360 }
+        if diff < -180 { return diff + 360 }
+        return diff
+    }
+
     /// Classifies a wind against a shoreline.
     ///
     /// - Parameters:

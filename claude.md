@@ -114,7 +114,34 @@ able to move when somebody is warned. See `SkillLevel.largeSurfWarningThresholdM
 |---|---|---|---|
 | Flat | פלטה | 0-0.1 m, Douglas 0-1 | Neutral / grey |
 | Glassy | גלאסי | Swell present + weak or offshore wind | Bright blue - the hero state |
-| Choppy | צ'ופי | Brisk onshore wind, whitecaps | Orange / red |
+| Fair | סביר | Everything in between | Neutral |
+| Choppy | צ'ופי | See the three triggers below | Orange / red |
+
+`סביר` is **not** from `surf_research.md`, which names only flat/glassy/choppy.
+A binary glassy-or-choppy misdescribes most real days on this coast, so the
+middle state uses plain Hebrew rather than invented slang. The wording is still
+unconfirmed against a local surfer.
+
+**Choppy has three triggers, and mean wind speed is only one of them.**
+
+1. Onshore or cross-onshore wind at or above 12 kt. *(the obvious one)*
+2. **Wind-sea energy share at or above 0.18** — how much of the sea is local
+   chop rather than swell, measured **at the break, not offshore**.
+3. **Gust at or above 18 kt**, whatever the mean is doing.
+
+Rules 2 and 3 exist because of 2026-08-29 at Bat Yam, where a surfer called the
+sea choppy at 10:00 and the app said `סביר` until noon: the mean wind never left
+the 0-10 kt "ideal" band all morning while the chop went from 11% of the energy
+to 24% and gusts reached 18 kt. Mean speed and direction alone cannot see a sea
+being contaminated by a wind that is technically light.
+
+Rule 2 must be evaluated **after** the spot transform. Long swell shoals up over
+the bar and short chop does not, so the same hour reads 28% offshore and 18% at
+the beach; keyed to the open-sea figure the rule fires an hour early.
+
+The glassy test deliberately runs **before** all three. A calm or offshore
+morning stays `גלאסי` even with an old wind sea still running - the hero state is
+rare and must not be collateral damage from a chop rule.
 
 ## Wind
 Coast runs roughly N-S with the sea to the west, so direction maps directly:
@@ -167,6 +194,28 @@ Sport profile is user-selected: surfing, kitesurfing, wing foil, SUP.
 
 **SUP:** rewards flat and calm, and must be suppressed to near-zero by the offshore-wind hazard regardless of how pleasant the surface looks.
 
+**Chop is its own term, separate from period.** Period is read off the dominant
+wave train, so while the swell stays the taller of the two it keeps describing
+clean groundswell no matter how much chop is building underneath - on 2026-08-29
+the reported period *rose* through a session that was falling apart. The score
+therefore reads `windSeaEnergyShare` directly.
+
+## Longshore current
+Water moving *along* the beach, estimated per train (Longuet-Higgins, signed by
+which side of the shore normal the train arrives from) plus the alongshore wind
+component. Two trains on opposite sides of the normal is confused water, not
+merely lumpy water, and is flagged separately as a cross sea.
+
+**This is not the offshore drift hazard and must never be presented as one.**
+That alert is about wind pushing a beginner out to sea, it is non-dismissable,
+and it owns the top of Home alone. A longshore current pushes a surfer down the
+beach - a nuisance and a fitness problem. Adding a second, more frequent banner
+is how people learn to ignore the first.
+
+It informs the **SUP score only** and renders as a Layer 2 readout. **The
+magnitude is provisional**: the mechanism is textbook but one session cannot
+calibrate it, so it stays off the surfing score until the log has more.
+
 ---
 
 # Build & Run Commands
@@ -181,6 +230,9 @@ The backend lives in `SurfCore/`, a SwiftPM package the app target depends on. K
 
 - **`swift test` — hermetic.** Fixtures only, no network, no clock. Proves the logic is self-consistent. It cannot prove a decoder matches what a provider actually sends.
 - **`swift run smoke [spot] [sport] [skill]` — live.** Hits the real Open-Meteo and ISRAMAR endpoints, runs the full pipeline, and prints the model's answer beside a real buoy measurement. This is the operating loop's step 6 made runnable.
+  - `--at <yyyy-MM-ddTHH:mm>` (Israel time) reports on a chosen hour instead of now. **A field report is always about a time that has already passed** — without this, checking the engine against what someone saw in the water meant having been running it at that hour. `--explain` and the score follow `--at`.
+  - `--today` prints the day hour by hour, including the chop share column.
+  - It appends to `calibration/observations.jsonl`, anchored to the repo via `#filePath` — never CWD-relative, because running it from `SurfCore/` used to fork a second ledger silently.
 
 **The unit suite passed 83/83 while three real bugs were live**, all found only by the smoke test: Eilat 400ing on the marine endpoint, `bestWindowToday` searching the whole week and returning a window that ran backwards across midnight, and `ewam` silently nulling 77 of 168 hours. Green unit tests are necessary and not sufficient — run the smoke test before believing any ingest change.
 

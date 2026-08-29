@@ -221,6 +221,46 @@ public struct SpotConditions: Sendable, Equatable {
     public let band: WaveBand
     public let seaState: SeaState
 
+    /// The two halves of `waveHeightMeters`, each transformed on its own
+    /// geometry: groundswell, and the locally generated wind wave.
+    ///
+    /// `waveHeightMeters` is their quadrature sum, which means a building chop
+    /// *raises* it — on 2026-08-29 at Bat Yam the reported beach height climbed
+    /// 0.62 → 0.66 m through a session that was deteriorating, because the swell
+    /// under it was falling 0.583 → 0.574 m while the chop doubled. The combined
+    /// number is not wrong; it is just unable to say which of those two happened,
+    /// and the difference is the whole session.
+    ///
+    /// `nil` when the source does not partition the sea, and for the synthetic
+    /// Gulf of Eilat path — deliberately, so that every rule keyed to the split
+    /// is a no-op there rather than silently calling a calm gulf morning choppy.
+    public let swellHeightMeters: Double?
+    public let windSeaHeightMeters: Double?
+
+    /// Swell and wind wave arriving from opposite sides of the shore normal,
+    /// with enough chop present to matter.
+    ///
+    /// Two trains forcing the water in opposite directions along the beach is
+    /// confused, disorganised water — which is the phrase the 2026-08-29 report
+    /// used, and which neither height nor period nor wind speed can express on
+    /// its own. At Bat Yam that morning the swell came from 290° (20° north of
+    /// the 270° normal) and the chop from 220-229°, 41-50° south of it.
+    public let isCrossSea: Bool
+
+    /// Signed longshore current at the break, m/s — positive flowing toward
+    /// `shorelineNormalDegrees + 90`. See `LongshoreCurrent`, including its
+    /// standing caveat that the magnitude is provisional.
+    ///
+    /// `nil` for the synthetic Gulf of Eilat path, which models no surf zone for
+    /// a current to run in.
+    public let longshoreCurrentMPS: Double?
+
+    /// Unsigned current speed, m/s — what a readout shows. Direction is carried
+    /// by the sign of `longshoreCurrentMPS`.
+    public var longshoreCurrentSpeedMPS: Double? {
+        longshoreCurrentMPS.map(abs)
+    }
+
     public let windSpeedMPS: Double
     public let windDirectionDegrees: Double
     public let windRelation: WindRelation
@@ -236,6 +276,18 @@ public struct SpotConditions: Sendable, Equatable {
     /// work. Displaying both is what proves the app transformed the data rather
     /// than reprinting a model.
     public let openSeaHeightMeters: Double
+
+    /// The open-sea **swell partition**, untransformed — the Layer 2 "raw
+    /// open-sea swell" the UI spec asks for, and the only model quantity
+    /// directly comparable to an offshore buoy.
+    ///
+    /// `openSeaHeightMeters` above is the combined sea, which includes wind
+    /// wave. Against an ISRAMAR reading those are different quantities and the
+    /// difference is not a model error: see `CalibrationRecord`.
+    ///
+    /// `nil` where the source did not partition.
+    public let openSeaSwellHeightMeters: Double?
+    public let openSeaSwellPeriodSeconds: Double?
 
     /// True when values were synthesised from local wind rather than taken from
     /// a wave model — the Gulf of Eilat case. The UI must label these.
@@ -323,6 +375,25 @@ public struct SpotConditions: Sendable, Equatable {
         return max(1.0, gust / windSpeedMPS)
     }
 
+    /// How much of the sea's energy is local wind chop rather than groundswell,
+    /// 0...1, measured at the break.
+    ///
+    /// Energy goes as `H²`, so this is the ratio of the squares rather than of
+    /// the heights. It is deliberately taken *after* the transform: long swell
+    /// shoals up over the bar and short chop does not, so the share at the beach
+    /// is markedly lower than the same hour offshore — at Bat Yam on 2026-08-29
+    /// the open-sea shares were 18/28/37% where the beach saw 11/18/24%. A
+    /// threshold set on the open-sea number would fire on the wrong hour.
+    ///
+    /// `nil` when the source did not separate the trains; see
+    /// `swellHeightMeters`.
+    public var windSeaEnergyShare: Double? {
+        guard let swell = swellHeightMeters, let windSea = windSeaHeightMeters else { return nil }
+        let total = swell * swell + windSea * windSea
+        guard total > 0 else { return 0 }
+        return (windSea * windSea) / total
+    }
+
     public init(
         timestamp: Date,
         spotID: String,
@@ -340,7 +411,13 @@ public struct SpotConditions: Sendable, Equatable {
         isDaylight: Bool = true,
         seaSurfaceTemperatureC: Double? = nil,
         airTemperatureC: Double? = nil,
-        seaLevelMeters: Double? = nil
+        seaLevelMeters: Double? = nil,
+        swellHeightMeters: Double? = nil,
+        windSeaHeightMeters: Double? = nil,
+        isCrossSea: Bool = false,
+        longshoreCurrentMPS: Double? = nil,
+        openSeaSwellHeightMeters: Double? = nil,
+        openSeaSwellPeriodSeconds: Double? = nil
     ) {
         self.timestamp = timestamp
         self.spotID = spotID
@@ -348,6 +425,12 @@ public struct SpotConditions: Sendable, Equatable {
         self.periodSeconds = periodSeconds
         self.band = band
         self.seaState = seaState
+        self.swellHeightMeters = swellHeightMeters
+        self.windSeaHeightMeters = windSeaHeightMeters
+        self.isCrossSea = isCrossSea
+        self.longshoreCurrentMPS = longshoreCurrentMPS
+        self.openSeaSwellHeightMeters = openSeaSwellHeightMeters
+        self.openSeaSwellPeriodSeconds = openSeaSwellPeriodSeconds
         self.windSpeedMPS = windSpeedMPS
         self.windDirectionDegrees = windDirectionDegrees
         self.windRelation = windRelation

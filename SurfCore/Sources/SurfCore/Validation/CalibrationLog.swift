@@ -30,6 +30,28 @@ public struct CalibrationRecord: Sendable, Codable, Equatable {
     /// layer now reads `*_peak_period` rather than the mean.
     public let modelPeriodSeconds: Double
 
+    /// The model's **swell partition** for the same hour, where the source
+    /// separated it.
+    ///
+    /// Logged beside the combined height because the two answer different
+    /// questions and only one of them is comparable to this buoy. On 2026-08-29
+    /// the smoke test reported `model 1.10 m vs buoy 0.64 m — DISAGREE`, a
+    /// +0.46 m error that looks like a badly miscalibrated model. Pulling
+    /// Open-Meteo at the buoy's own coordinates for the same hour gave a
+    /// combined 1.08 m and a **swell partition of 0.66 m** against the buoy's
+    /// 0.64 m: the swell channel was right to 2 cm and the entire discrepancy
+    /// was wind sea.
+    ///
+    /// Without this field the log accumulates that gap as a height bias, and
+    /// `suggestedHeightCorrection` would eventually propose shrinking every
+    /// spot's exposure coefficient to cancel an error the transform never made.
+    /// A definition mismatch must not be tuned away as if it were a physics one.
+    ///
+    /// `nil` for records written before this was captured, and for any source
+    /// that does not partition.
+    public let modelSwellHeightMeters: Double?
+    public let modelSwellPeriodSeconds: Double?
+
     public let buoyHeightMeters: Double
     public let buoyPeakPeriodSeconds: Double
 
@@ -40,6 +62,8 @@ public struct CalibrationRecord: Sendable, Codable, Equatable {
         observedAt: Date,
         modelOpenSeaHeightMeters: Double,
         modelPeriodSeconds: Double,
+        modelSwellHeightMeters: Double? = nil,
+        modelSwellPeriodSeconds: Double? = nil,
         buoyHeightMeters: Double,
         buoyPeakPeriodSeconds: Double
     ) {
@@ -49,6 +73,8 @@ public struct CalibrationRecord: Sendable, Codable, Equatable {
         self.observedAt = observedAt
         self.modelOpenSeaHeightMeters = modelOpenSeaHeightMeters
         self.modelPeriodSeconds = modelPeriodSeconds
+        self.modelSwellHeightMeters = modelSwellHeightMeters
+        self.modelSwellPeriodSeconds = modelSwellPeriodSeconds
         self.buoyHeightMeters = buoyHeightMeters
         self.buoyPeakPeriodSeconds = buoyPeakPeriodSeconds
     }
@@ -56,6 +82,15 @@ public struct CalibrationRecord: Sendable, Codable, Equatable {
     /// Signed. Positive means the model runs bigger than the sea.
     public var heightErrorMeters: Double {
         modelOpenSeaHeightMeters - buoyHeightMeters
+    }
+
+    /// The same error measured against the swell partition instead of the
+    /// combined sea. `nil` where the partition was not captured.
+    ///
+    /// This is the number that should drive any coefficient change: it compares
+    /// like with like.
+    public var swellHeightErrorMeters: Double? {
+        modelSwellHeightMeters.map { $0 - buoyHeightMeters }
     }
 
     public var periodErrorSeconds: Double {
@@ -76,12 +111,22 @@ public struct CalibrationSummary: Sendable, Equatable {
     public let heightRMSEMeters: Double
     public let periodBiasSeconds: Double
     public let periodRMSESeconds: Double
+    /// Bias measured against the swell partition, over the records that carry
+    /// one. `nil` until some do.
+    ///
+    /// Reported beside `heightBiasMeters` rather than replacing it, because the
+    /// gap between the two IS the finding: if the combined bias stays large
+    /// while this one sits near zero, the model is fine and the comparison was
+    /// wrong. Only this number may be tuned against.
+    public let swellHeightBiasMeters: Double?
+    public let swellCount: Int
 
     public init(records: [CalibrationRecord]) {
         count = records.count
         guard !records.isEmpty else {
             heightBiasMeters = 0; heightRMSEMeters = 0
             periodBiasSeconds = 0; periodRMSESeconds = 0
+            swellHeightBiasMeters = nil; swellCount = 0
             return
         }
         let n = Double(records.count)
@@ -91,16 +136,32 @@ public struct CalibrationSummary: Sendable, Equatable {
         periodBiasSeconds = pe.reduce(0, +) / n
         heightRMSEMeters = (he.reduce(0) { $0 + $1 * $1 } / n).squareRoot()
         periodRMSESeconds = (pe.reduce(0) { $0 + $1 * $1 } / n).squareRoot()
+
+        // Only over the records that carry a partition, so adding the field does
+        // not silently reinterpret the history written before it existed.
+        let se = records.compactMap(\.swellHeightErrorMeters)
+        swellCount = se.count
+        swellHeightBiasMeters = se.isEmpty ? nil : se.reduce(0, +) / Double(se.count)
     }
 
     /// The multiplier that would remove the height bias.
     ///
     /// Applied to a spot's `exposureCoefficient` this is the whole point of the
     /// exercise — but only once there are enough records for the bias to mean
-    /// anything, which is why `count` travels with it.
+    /// anything, which is why the count travels with it.
+    ///
+    /// **Measured against the swell partition, never the combined sea.** The
+    /// combined bias is contaminated by a definition mismatch: an ISRAMAR buoy
+    /// and a model's combined `wave_height` are not the same quantity, and on
+    /// 2026-08-29 they differed by 0.46 m at Bat Yam while the swell channel
+    /// agreed to 2 cm. Correcting a spot's sheltering to cancel that would be
+    /// tuning the transform for an error made somewhere else entirely.
+    ///
+    /// Returns `nil` — refusing to guess — until 30 records carry a partition,
+    /// even if hundreds of older records are present.
     public func suggestedHeightCorrection(againstMeanObserved mean: Double) -> Double? {
-        guard count >= 30, mean > 0.01 else { return nil }
-        return mean / (mean + heightBiasMeters)
+        guard swellCount >= 30, mean > 0.01, let bias = swellHeightBiasMeters else { return nil }
+        return mean / (mean + bias)
     }
 }
 

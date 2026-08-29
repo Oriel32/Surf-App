@@ -9,7 +9,8 @@ struct CalibrationTests {
         model: Double,
         buoy: Double,
         modelPeriod: Double = 6.3,
-        buoyPeriod: Double = 6.5
+        buoyPeriod: Double = 6.5,
+        modelSwell: Double? = nil
     ) -> CalibrationRecord {
         CalibrationRecord(
             recordedAt: .utc(2026, 8, 26, 17),
@@ -18,6 +19,7 @@ struct CalibrationTests {
             observedAt: .utc(2026, 8, 26, 17),
             modelOpenSeaHeightMeters: model,
             modelPeriodSeconds: modelPeriod,
+            modelSwellHeightMeters: modelSwell,
             buoyHeightMeters: buoy,
             buoyPeakPeriodSeconds: buoyPeriod
         )
@@ -56,14 +58,49 @@ struct CalibrationTests {
     func refusesToTuneOnThinData() {
         // Two observations cannot tune a coefficient, and pretending otherwise
         // is how a plausible-looking number gets baked in.
-        let thin = CalibrationSummary(records: [record(model: 0.8, buoy: 0.6)])
+        let thin = CalibrationSummary(records: [record(model: 0.8, buoy: 0.6, modelSwell: 0.8)])
         #expect(thin.suggestedHeightCorrection(againstMeanObserved: 0.6) == nil)
 
-        let plenty = CalibrationSummary(records: (0..<40).map { _ in record(model: 0.8, buoy: 0.6) })
+        let plenty = CalibrationSummary(
+            records: (0..<40).map { _ in record(model: 0.8, buoy: 0.6, modelSwell: 0.8) }
+        )
         let correction = plenty.suggestedHeightCorrection(againstMeanObserved: 0.6)
         #expect(correction != nil)
         // Model reads 0.8 where the sea is 0.6, so it needs scaling down.
         #expect((correction ?? 1) < 1.0)
+    }
+
+    @Test("A history with no swell partition cannot tune anything, however long it is")
+    func refusesToTuneOnTheCombinedSea() {
+        // 2026-08-29 at Bat Yam: the combined sea read 1.10 m against a 0.64 m
+        // buoy — a +0.46 m error that looks like a badly calibrated transform.
+        // The swell partition that hour was 0.66 m: right to 2 cm. The gap was a
+        // definition mismatch between a model's combined `wave_height` and what
+        // the buoy reports, and correcting a spot's sheltering to cancel it
+        // would break every spot to fix nothing.
+        let combinedOnly = CalibrationSummary(
+            records: (0..<40).map { _ in record(model: 1.10, buoy: 0.64) }
+        )
+        #expect(combinedOnly.count == 40)
+        #expect(abs(combinedOnly.heightBiasMeters - 0.46) < 1e-9)
+        // No partition captured, so no correction — however much data there is.
+        #expect(combinedOnly.swellHeightBiasMeters == nil)
+        #expect(combinedOnly.suggestedHeightCorrection(againstMeanObserved: 0.64) == nil)
+
+        // The same hours with the partition recorded: the swell channel is
+        // nearly unbiased, and that is the number allowed to move a coefficient.
+        let partitioned = CalibrationSummary(
+            records: (0..<40).map { _ in record(model: 1.10, buoy: 0.64, modelSwell: 0.66) }
+        )
+        #expect(abs(partitioned.heightBiasMeters - 0.46) < 1e-9)
+        #expect(abs((partitioned.swellHeightBiasMeters ?? 9) - 0.02) < 1e-9)
+        #expect(partitioned.swellCount == 40)
+
+        // A 2 cm bias on a 0.64 m sea barely moves anything — which is the
+        // point. Tuning against the combined 0.46 m would have shrunk every
+        // coefficient by more than a third.
+        let correction = partitioned.suggestedHeightCorrection(againstMeanObserved: 0.64)
+        #expect((correction ?? 0) > 0.95)
     }
 
     @Test("Records survive a round trip through the log file")

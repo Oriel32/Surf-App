@@ -76,11 +76,26 @@ public enum MatchScoreEngine {
         // band in this model calls it light.
         let gust = tuning.gust.value(c.gustRatio)
 
+        // How much of the sea is swell rather than locally generated slop.
+        //
+        // `shape` above cannot see this: it reads the DOMINANT train's period,
+        // so while the swell stays the taller train the number keeps describing
+        // clean groundswell no matter how much chop is piling up underneath it.
+        // On 2026-08-29 that is exactly what happened — the reported period rose
+        // through a session the surfer watched come apart.
+        //
+        // 1.0 where the source does not partition the sea: a rule that cannot be
+        // evaluated must not quietly charge the day for it.
+        let chop = c.windSeaEnergyShare.map { tuning.chopShare.value($0) } ?? 1.0
+
         // Multiplied, not summed: a session needs power AND a rideable size AND
-        // a wave that breaks properly. The floors keep a genuinely big
-        // long-period day from reading as a flat zero just because it is blown
-        // out - the swell still arrived, and that is worth knowing.
-        let waveQuality = energy * size * (tuning.periodFloor + (1 - tuning.periodFloor) * shape)
+        // a wave that breaks properly AND a sea clean enough to let it. The
+        // floors keep a genuinely big long-period day from reading as a flat zero
+        // just because it is blown out - the swell still arrived, and that is
+        // worth knowing.
+        let waveQuality = energy * size
+            * (tuning.periodFloor + (1 - tuning.periodFloor) * shape)
+            * (tuning.chopFloor + (1 - tuning.chopFloor) * chop)
         let windQuality = (tuning.windFloor + (1 - tuning.windFloor) * wind)
             * (tuning.gustFloor + (1 - tuning.gustFloor) * gust)
         let value = waveQuality * windQuality
@@ -89,6 +104,7 @@ public enum MatchScoreEngine {
             "energy": energy,
             "size": size,
             "shape": shape,
+            "chop": chop,
             "wind": wind,
             "gust": gust
         ])
@@ -118,8 +134,16 @@ public enum MatchScoreEngine {
         let flatness = tuning.flatness.value(c.rideableHeightMeters)
         let wind = tuning.wind.value(c.windSpeedKnots)
 
-        let value = flatness * (tuning.windFloor + (1 - tuning.windFloor) * wind)
-        return (value, ["flatness": flatness, "wind": wind])
+        // Water moving along the beach is the paddler's problem specifically: a
+        // SUP has the freeboard of a sail and the drift of a raft. 1.0 where the
+        // basin models no surf zone for a current to run in, so Eilat is
+        // unchanged rather than quietly penalised.
+        let current = c.longshoreCurrentSpeedMPS.map { tuning.current.value($0) } ?? 1.0
+
+        let value = flatness
+            * (tuning.windFloor + (1 - tuning.windFloor) * wind)
+            * (tuning.currentFloor + (1 - tuning.currentFloor) * current)
+        return (value, ["flatness": flatness, "wind": wind, "current": current])
     }
 
     // MARK: - Safety suppression
