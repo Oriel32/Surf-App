@@ -38,7 +38,16 @@ The repo is public, which is what makes the macOS runner minutes free — GitHub
 gives public repositories unlimited standard-runner minutes. On a private repo,
 macOS bills at a **10x multiplier** against a small monthly quota. Nothing here
 is a credential: the Stormglass key never enters source control, and the CI build
-has no signing secrets at all.
+has no signing secrets at all. The IMS token is deliberately kept out of the app
+for the same reason — a token compiled into a public repo's build artifact is a
+token anyone can download. Backend tooling reads it from a gitignored `.env`:
+
+```
+cp .env.example .env      # then paste the token after IMS_API_TOKEN=
+```
+
+Ask IMS for one at `ims@ims.gov.il`. Without it, `swift run smoke` still runs and
+simply reports wind as model-only.
 
 ## 2. Prepare the PC
 

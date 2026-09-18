@@ -144,6 +144,55 @@ func diagnose(_ error: any Error) -> FailureKind {
     return .schema
 }
 
+// MARK: - Repo root and secrets
+
+/// Anchored to the repository, not to wherever the process happens to be
+/// standing. This was a real fork: running the tool from `SurfCore/` instead of
+/// the repo root silently created a SECOND calibration ledger, so the history a
+/// coefficient would eventually be tuned from depended on which directory
+/// somebody typed the command in.
+///
+/// `#filePath` is this source file at build time, four levels below the root:
+/// SurfCore/Sources/smoke/main.swift.
+let repoRoot = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()   // smoke
+    .deletingLastPathComponent()   // Sources
+    .deletingLastPathComponent()   // SurfCore
+    .deletingLastPathComponent()   // repo root
+
+/// The IMS token, from the environment or the gitignored `.env` beside it.
+///
+/// The file is the path that actually works here: this builds and runs under
+/// WSL, and Windows environment variables do not cross into it. Values are
+/// trimmed of whitespace *including carriage returns* — a `.env` saved by a
+/// Windows editor carries CRLF, and a token with a trailing `\r` produces a 401
+/// that looks exactly like a wrong token.
+func secret(_ name: String) -> String? {
+    if let fromEnvironment = ProcessInfo.processInfo.environment[name],
+       !fromEnvironment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return fromEnvironment.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    guard let contents = try? String(contentsOf: repoRoot.appendingPathComponent(".env"), encoding: .utf8)
+    else { return nil }
+
+    for line in contents.split(whereSeparator: \.isNewline) {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.hasPrefix("#"), let separator = trimmed.firstIndex(of: "=") else { continue }
+        guard trimmed[trimmed.startIndex..<separator].trimmingCharacters(in: .whitespaces) == name else { continue }
+        var value = trimmed[trimmed.index(after: separator)...]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // `KEY="value"` is ordinary `.env` spelling and what a shell strips when
+        // it sources the file. Without this the quotes travel into the header and
+        // the server answers 401 — which looks exactly like a bad token.
+        if value.count >= 2, let first = value.first, let last = value.last,
+           first == last, first == "\"" || first == "'" {
+            value = String(value.dropFirst().dropLast())
+        }
+        return value.isEmpty ? nil : value
+    }
+    return nil
+}
+
 func describeAge(_ interval: TimeInterval) -> String {
     let minutes = Int(interval / 60)
     if minutes < 90 { return "\(minutes) minutes ago" }
@@ -176,15 +225,24 @@ print("  \(spot.latitude), \(spot.longitude)   basin: \(spot.basin.rawValue)")
 print("  exposure \(spot.exposureCoefficient) · faces \(Int(spot.shorelineNormalDegrees))° · break depth \(spot.breakDepthMeters) m")
 print("  profile: \(sport.rawValue) / \(skill.rawValue)")
 
+// The token is optional on purpose: a missing one costs the measured-wind
+// section and nothing else, exactly as a dead station would.
+let imsToken = secret("IMS_API_TOKEN")
+let imsClient = imsToken.map { ImsClient(token: $0) }
+
 let repository = ForecastRepository(
     primary: OpenMeteoClient(),
-    observations: IsramarClient()
+    observations: IsramarClient(),
+    windObservations: imsClient
 )
 
 let forecast: SpotForecast
 do {
     rule("FETCHING")
     print("  Open-Meteo marine + forecast …")
+    if imsToken == nil {
+        print("  IMS: no token — set IMS_API_TOKEN in .env (see .env.example). Wind stays model-only.")
+    }
     forecast = try await repository.forecast(for: spot, profile: profile)
     print("  OK — \(forecast.hours.count) hourly samples decoded")
 } catch {
@@ -217,9 +275,18 @@ guard !forecast.hours.isEmpty else {
 // The hour everything below reports on. `--at` selects a past or future hour;
 // without it, now.
 let now = requestedHour ?? Date()
-let current = forecast.hours.min {
-    abs($0.conditions.timestamp.timeIntervalSince(now)) < abs($1.conditions.timestamp.timeIntervalSince(now))
-}!
+// The hour the user is standing *in*, which is what `AppModel.currentHour` shows
+// on screen — not the nearest hour, which rounds forward: at 14:34 that picked
+// 15:00 and reported the next hour's forecast as "right now". It also made a
+// live wind comparison impossible, since a measurement is always in the past and
+// so was never within half an hour of a model hour that had rounded up.
+//
+// Falls back to the nearest hour when `--at` points before the series begins, so
+// that case still reports something and says how far off it is.
+let current = forecast.hours.last { $0.conditions.timestamp <= now }
+    ?? forecast.hours.min {
+        abs($0.conditions.timestamp.timeIntervalSince(now)) < abs($1.conditions.timestamp.timeIntervalSince(now))
+    }!
 let c = current.conditions
 
 rule((requestedHour == nil ? "RIGHT NOW  (" : "REQUESTED HOUR  (") + clock(c.timestamp) + ")")
@@ -249,7 +316,17 @@ if let currentMPS = c.longshoreCurrentMPS, abs(currentMPS) >= 0.05 {
     print("  Longshore current: \(String(format: "%.2f m/s", abs(currentMPS))) \(heading)   [provisional]")
 }
 print("  Sea state        : \(c.seaState.hebrew)  /  \(c.seaState.english)")
-print("  Wind             : \(knots(c.windSpeedKnots)) \(c.windRelation.rawValue) (from \(Int(c.windDirectionDegrees))°)")
+print("  Wind             : \(knots(c.windSpeedKnots)) \(c.windRelation.rawValue) (from \(Int(c.windDirectionDegrees))°)"
+    + (c.windGustKnots.map { ", gusting \(knots($0))" } ?? ""))
+// The model's wind beside a real anemometer's. Printed here rather than only in
+// the ground-truth section because this is the block someone reads when they are
+// deciding whether to believe the screen.
+if let measured = c.measuredWind {
+    print("  Measured wind    : \(knots(measured.speedKnots)) \(measured.relation.rawValue) "
+        + "(from \(Int(measured.observation.windDirectionDegrees))°)"
+        + (measured.gustKnots.map { ", gusting \(knots($0))" } ?? "")
+        + "   \(measured.stationNameHebrew), \(describeAge(measured.observation.age(asOf: now)))")
+}
 if let water = c.seaSurfaceTemperatureC { print("  Water            : \(String(format: "%.1f °C", water))") }
 if let air = c.airTemperatureC { print("  Air              : \(String(format: "%.1f °C", air))") }
 if c.isSynthetic {
@@ -382,6 +459,166 @@ for day in WindowFinder.dailyWindows(in: forecast.hours) {
         + (peak.alerts.isEmpty ? "" : "  ALERT:\(peak.alerts.map(\.severity.rawValue).joined(separator: ","))"))
 }
 
+// MARK: - Measured wind
+
+// Placed ahead of the buoy section deliberately: that one exits the process
+// early when it has nothing to log, and anything below it would never run.
+rule("GROUND TRUTH — IMS measured wind")
+
+if spot.windStationID == nil {
+    print("  no coastal station for this spot — the nearest masts are inland or on a ridge,")
+    print("  and a ridge wind is not this beach's wind")
+} else if imsToken == nil {
+    print("  no IMS token configured — wind is model-only")
+} else if let reference = forecast.windReference {
+    print("  \(reference.nameHebrew) (station \(reference.stationID)), "
+        + String(format: "%.1f km", reference.distanceKilometres)
+        + " \(reference.direction.rawValue)")
+
+    // With `--at`, the repository's "latest" reading describes now, not the hour
+    // being reported on. The daily endpoint is asked for the hour itself — the
+    // buoy cannot do this, which is why `--at` used to have nothing to check.
+    let reading: WindObservation?
+    if let requestedHour, let client = imsClient, let stationID = spot.windStationID {
+        reading = try? await client.wind(stationID: stationID, near: requestedHour)
+        if reading == nil {
+            print("  no usable reading for that hour — the station may not have been reporting")
+        }
+    } else if case .fresh(let live) = forecast.wind {
+        reading = live
+    } else if case .stale(let old, let age) = forecast.wind {
+        print("  last reading \(knots(Units.knots(fromMetersPerSecond: old.windSpeedMPS))) "
+            + "from \(Int(old.windDirectionDegrees))°, \(describeAge(age))  [STALE]")
+        print("  withheld from the current hour — wind this old describes a sea that has moved on")
+        reading = nil
+    } else {
+        // The repository swallows the error to protect the forecast; the smoke
+        // test's whole job is to say what actually went wrong.
+        if let client = imsClient, let stationID = spot.windStationID {
+            do {
+                _ = try await client.latestWind(stationID: stationID)
+            } catch {
+                print("  FAIL: \(error)")
+                switch diagnose(error) {
+                case .network: print("  the request never completed — transport, not schema")
+                case .rejected(401), .rejected(403):
+                    print("  the server refused the token. Check IMS_API_TOKEN in .env,")
+                    print("  including a stray carriage return if the file was saved on Windows.")
+                case .rejected(let code): print("  the server answered \(code) — check the URL and station id")
+                case .schema: print("  the payload did not match the decoder, or every channel was flagged invalid")
+                }
+            }
+        }
+        reading = nil
+    }
+
+    if let reading {
+        let measuredKnots = Units.knots(fromMetersPerSecond: reading.windSpeedMPS)
+        let relation = Compass.windRelation(
+            windFromDegrees: reading.windDirectionDegrees,
+            shorelineNormalDegrees: spot.shorelineNormalDegrees
+        )
+        let age = reading.age(asOf: now)
+        print("  measured \(knots(measuredKnots)) \(relation.rawValue) "
+            + "(from \(Int(reading.windDirectionDegrees))°)"
+            + (reading.windGustMPS.map { ", gusting \(knots(Units.knots(fromMetersPerSecond: $0)))" } ?? "")
+            + (requestedHour == nil
+               ? "   \(describeAge(age))" + (abs(age) <= 3600 ? "  [FRESH]" : "  [OUT OF HOUR]")
+               : "   at \(clock(reading.observedAt))"))
+
+        // The two halves of a comparison have to be the same hour. Open-Meteo's
+        // forecast series starts at midnight today, so `--at` pointed at an
+        // earlier day lands on the *nearest available* model hour instead — and
+        // a delta printed across that gap is a number about nothing. It gets
+        // stated as a gap rather than dressed up as a disagreement.
+        let minutesApart = abs(c.timestamp.timeIntervalSince(reading.observedAt)) / 60
+        let sameHour = minutesApart <= 30
+        if !sameHour {
+            print("  no comparison: the nearest model hour is \(clock(c.timestamp)), "
+                + String(format: "%.0f", minutesApart) + " minutes away.")
+            print("  Open-Meteo's series starts at midnight today, so --at cannot reach an")
+            print("  earlier date — the station's history goes back further than the model's.")
+        }
+
+        let speedDelta = c.windSpeedKnots - measuredKnots
+        if sameHour {
+            print("  model same hour  : \(knots(c.windSpeedKnots)) \(c.windRelation.rawValue) "
+                + "(from \(Int(c.windDirectionDegrees))°)"
+                + (c.windGustKnots.map { ", gusting \(knots($0))" } ?? ""))
+            // Both halves have to agree before this says they agree. A 2-knot
+            // speed delta across an 88-degree direction split is not a model
+            // that matches the coast; it is two different winds that happen to
+            // be blowing equally hard.
+            let directionDelta = Compass.angularDistance(c.windDirectionDegrees, reading.windDirectionDegrees)
+            let agrees = abs(speedDelta) < 4 && directionDelta < 45
+            print("  delta            : \(String(format: "%+.1f kt", speedDelta)), "
+                + String(format: "%.0f°", directionDelta)
+                + "  \(agrees ? "— model agrees with the coast" : "— MODEL AND STATION DISAGREE")")
+
+            if c.windRelation.blowsAwayFromShore != relation.blowsAwayFromShore {
+                print("  ⚠ they disagree about the direction that matters: one says the wind blows off the land")
+            }
+            if let gust = reading.windGustMPS {
+                let gustKnots = Units.knots(fromMetersPerSecond: gust)
+                print("  gust check       : chop threshold is \(knots(SeaStateRules.standard.gustChopKnots)); "
+                    + "measured \(knots(gustKnots)) \(gustKnots >= SeaStateRules.standard.gustChopKnots ? "— above" : "— below")")
+            }
+
+            // Did the measurement change the answer? This is the only line that
+            // says whether the fourth source earned its place today.
+            let modelOnly = { var bare = c; bare.measuredWind = nil; return bare }()
+            let modelOnlyAlerts = SafetyEngine.alerts(for: modelOnly, profile: profile)
+            if current.alerts.contains(where: { $0.kind == .offshoreDrift }),
+               !modelOnlyAlerts.contains(where: { $0.kind == .offshoreDrift }) {
+                print("  ⚠ THE MEASUREMENT RAISED A DRIFT ALERT THE MODEL MISSED")
+            }
+
+            // Keep the pair. One run is an anecdote; the series is what can say
+            // whether this mast describes this beach.
+            let windLogURL = repoRoot
+                .appendingPathComponent("calibration")
+                .appendingPathComponent("wind_observations.jsonl")
+            do {
+                try WindCalibrationLog.append(
+                    WindCalibrationRecord(
+                        recordedAt: now,
+                        spotID: spot.id,
+                        stationID: reading.stationID,
+                        observedAt: reading.observedAt,
+                        stationDistanceKilometres: reference.distanceKilometres,
+                        modelWindSpeedMPS: c.windSpeedMPS,
+                        modelWindDirectionDegrees: c.windDirectionDegrees,
+                        modelWindGustMPS: c.windGustMPS,
+                        measuredWindSpeedMPS: reading.windSpeedMPS,
+                        measuredWindDirectionDegrees: reading.windDirectionDegrees,
+                        measuredWindGustMPS: reading.windGustMPS
+                    ),
+                    to: windLogURL
+                )
+                let history = try WindCalibrationLog.read(from: windLogURL)
+                let summary = WindCalibrationLog.summarise(
+                    history,
+                    spotID: spot.id,
+                    shorelineNormalDegrees: spot.shorelineNormalDegrees
+                )
+                print("  logged. \(summary.count) wind pair(s) for this spot so far")
+                if summary.count >= 2 {
+                    print("    speed bias \(String(format: "%+.1f kt", summary.speedBiasKnots))"
+                        + "  RMSE \(String(format: "%.1f kt", summary.speedRMSEKnots))"
+                        + "  direction \(String(format: "%.0f°", summary.directionMeanAbsoluteErrorDegrees))")
+                    print("    offshore/onshore agreement "
+                        + String(format: "%.0f%%", summary.offshoreAgreementRate * 100))
+                }
+                if summary.count < 30 {
+                    print("    (need 30+ before this station can be trusted with the sea state or the score)")
+                }
+            } catch {
+                print("  (could not write wind calibration log: \(error))")
+            }
+        }
+    }
+}
+
 // MARK: - Ground truth
 
 rule("GROUND TRUTH — ISRAMAR buoy")
@@ -421,20 +658,6 @@ case .fresh(let reading):
     // was just taught to avoid.
     let hoursApart = abs(c.timestamp.timeIntervalSince(reading.observedAt)) / 3600
 
-    // Anchored to the repository, not to wherever the process happens to be
-    // standing. This was a real fork: running the tool from `SurfCore/` instead
-    // of the repo root silently created a SECOND ledger at
-    // `SurfCore/calibration/observations.jsonl`, so the history a coefficient
-    // would eventually be tuned against depended on which directory somebody
-    // typed the command in.
-    //
-    // `#filePath` is this source file at build time, four levels below the root:
-    // SurfCore/Sources/smoke/main.swift.
-    let repoRoot = URL(fileURLWithPath: #filePath)
-        .deletingLastPathComponent()   // smoke
-        .deletingLastPathComponent()   // Sources
-        .deletingLastPathComponent()   // SurfCore
-        .deletingLastPathComponent()   // repo root
     let logURL = repoRoot
         .appendingPathComponent("calibration")
         .appendingPathComponent("observations.jsonl")

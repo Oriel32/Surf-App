@@ -45,6 +45,17 @@ struct StubObservationSource: ObservationSource {
     }
 }
 
+struct StubWindSource: WindObservationSource {
+    var observation: WindObservation?
+    var error: SourceError? = nil
+
+    func latestWind(stationID: String) async throws -> WindObservation {
+        if let error { throw error }
+        guard let observation else { throw SourceError.unknownStation(stationID) }
+        return observation
+    }
+}
+
 struct StubEnsembleSource: ModelEnsembleSource {
     var spreads: [ModelSpread] = []
     var error: SourceError? = nil
@@ -172,6 +183,91 @@ struct ForecastRepositoryTests {
         let forecast = try await repository.forecast(for: spot, profile: profile)
         #expect(forecast.buoy == .unavailable)
         #expect(!forecast.hours.isEmpty)
+    }
+
+    // MARK: - Measured wind
+
+    /// The spot in these tests points at the Tel Aviv coast mast, and `now` is
+    /// 17:00 UTC on 2026-08-25, so the current hour is the 17:00 sample.
+    private var windSpot: Spot {
+        Spot.fixture(buoyStationID: "hadera", windStationID: "tel-aviv-coast")
+    }
+
+    private func windReading(minutesAgo: Double, knots: Double = 14) -> WindObservation {
+        WindObservation(
+            stationID: "tel-aviv-coast",
+            observedAt: now.addingTimeInterval(-minutesAgo * 60),
+            windSpeedMPS: mps(knots: knots),
+            windDirectionDegrees: 90,
+            windGustMPS: mps(knots: knots + 4)
+        )
+    }
+
+    @Test("A fresh reading attaches to the current hour and to no other")
+    func freshWindAttachesToCurrentHourOnly() async throws {
+        let repository = ForecastRepository(
+            primary: StubForecastSource(samples: series(hours: 24)),
+            windObservations: StubWindSource(observation: windReading(minutesAgo: 20)),
+            clock: { [now] in now }
+        )
+
+        let forecast = try await repository.forecast(for: windSpot, profile: profile)
+
+        let attached = forecast.hours.filter { $0.conditions.measuredWind != nil }
+        #expect(attached.count == 1)
+        #expect(attached.first?.conditions.timestamp == Date.utc(2026, 8, 25, 17))
+        // The relation is resolved against this beach, not copied from the model.
+        #expect(attached.first?.conditions.measuredWind?.relation == .offshore)
+        #expect(forecast.wind == .fresh(windReading(minutesAgo: 20)))
+        #expect(forecast.windReference?.nameHebrew == "חוף תל אביב")
+    }
+
+    @Test("An hour-and-a-half-old reading is surfaced as stale and attached to nothing")
+    func staleWindIsNotAttached() async throws {
+        let repository = ForecastRepository(
+            primary: StubForecastSource(samples: series(hours: 24)),
+            windObservations: StubWindSource(observation: windReading(minutesAgo: 90)),
+            clock: { [now] in now }
+        )
+
+        let forecast = try await repository.forecast(for: windSpot, profile: profile)
+
+        #expect(forecast.hours.allSatisfy { $0.conditions.measuredWind == nil })
+        guard case .stale(_, let age) = forecast.wind else {
+            Issue.record("expected a stale wind reading, got \(forecast.wind)")
+            return
+        }
+        #expect(abs(age - 90 * 60) < 1)
+    }
+
+    @Test("A dead station costs the wind readout, not the forecast")
+    func windFailureDegradesGracefully() async throws {
+        let repository = ForecastRepository(
+            primary: StubForecastSource(samples: series()),
+            windObservations: StubWindSource(
+                observation: nil,
+                error: SourceError.malformedPayload("ims: sensor flagged bad")
+            ),
+            clock: { [now] in now }
+        )
+
+        let forecast = try await repository.forecast(for: windSpot, profile: profile)
+        #expect(forecast.wind == .unavailable)
+        #expect(!forecast.hours.isEmpty)
+    }
+
+    @Test("A spot with no wind station asks for nothing")
+    func spotWithoutStationHasNoWind() async throws {
+        let repository = ForecastRepository(
+            primary: StubForecastSource(samples: series()),
+            windObservations: StubWindSource(observation: windReading(minutesAgo: 10)),
+            clock: { [now] in now }
+        )
+
+        let forecast = try await repository.forecast(for: spot, profile: profile)
+        #expect(forecast.wind == .unavailable)
+        #expect(forecast.windReference == nil)
+        #expect(forecast.hours.allSatisfy { $0.conditions.measuredWind == nil })
     }
 
     @Test("A failing ensemble source costs the confidence figure, not the forecast")

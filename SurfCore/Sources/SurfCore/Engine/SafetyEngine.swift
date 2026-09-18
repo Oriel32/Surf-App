@@ -20,12 +20,22 @@ public enum SafetyEngine {
         return result
     }
 
+    /// Two independent witnesses, and either one is enough.
+    ///
+    /// The model is a 9 km grid cell averaged over an hour; the station is a mast
+    /// on this coast ten minutes ago. Each can miss an offshore morning the other
+    /// sees, so the alert fires on whichever says the wind is blowing out to sea,
+    /// and quotes the stronger of the two.
+    ///
+    /// **A measurement can raise this alert and can never cancel it.** A station
+    /// is not the water at the break: it sits behind the same buildings that
+    /// create the illusion this alert exists to describe, so a calm reading is
+    /// not evidence of a calm sea. Letting one suppress a modelled hazard would
+    /// turn the one screen that must over-warn into one that argues with itself.
     private static func offshoreDriftAlert(
         _ conditions: SpotConditions,
         profile: UserProfile
     ) -> SafetyAlert? {
-        guard conditions.windRelation.blowsAwayFromShore else { return nil }
-
         // Anyone on a floating craft is at far greater risk than a surfer on a
         // short board: a SUP is a sail, and it cannot be duck-dived under a gust.
         // Skill at *surfing* does not change that, so a paddler is always held to
@@ -37,11 +47,29 @@ public enum SafetyEngine {
                   SkillLevel.beginner.offshoreWarningThresholdKnots)
             : profile.skill.offshoreWarningThresholdKnots
 
-        let knots = conditions.windSpeedKnots
-        guard knots >= threshold else { return nil }
+        let modelKnots = conditions.windRelation.blowsAwayFromShore
+            ? conditions.windSpeedKnots
+            : nil
+        let measured = conditions.measuredWind.flatMap {
+            $0.relation.blowsAwayFromShore ? $0 : nil
+        }
+        let measuredKnots = measured?.speedKnots
+
+        let triggering = [modelKnots, measuredKnots].compactMap { $0 }.filter { $0 >= threshold }
+        guard let knots = triggering.max() else { return nil }
 
         let severity: AlertSeverity =
             (onFloatingCraft || profile.skill == .beginner || knots >= 15) ? .danger : .caution
+
+        // Named only when the station is the reason this fired, or the stronger
+        // of the two — otherwise the measurement is corroboration and saying so
+        // just lengthens a banner that has to be read at a glance.
+        let attribution = measured.flatMap { wind -> String? in
+            guard wind.speedKnots >= threshold,
+                  wind.speedKnots >= (modelKnots ?? 0) else { return nil }
+            return " נמדדו \(HebrewText.ltr("\(Int(wind.speedKnots.rounded()))")) קשר "
+                + "בתחנת \(wind.stationNameHebrew) ב-\(HebrewText.ltr(clockTime(wind.observedAt)))."
+        } ?? ""
 
         return SafetyAlert(
             kind: .offshoreDrift,
@@ -50,9 +78,22 @@ public enum SafetyEngine {
             hebrewBody: """
             הים נראה שטוח ורגוע מהחוף, אבל זו אשליה: מעבר לצל הרוח של הבניינים והמצוק \
             הרוח מכה בעוצמה של \(Int(knots.rounded())) קשר ודוחפת אל הים הפתוח, מהר יותר \
-            ממה שאפשר לחתור בחזרה. מתחילים, גולשי סאפ וקיאקים – אין להיכנס למים.
+            ממה שאפשר לחתור בחזרה.\(attribution) מתחילים, גולשי סאפ וקיאקים – אין להיכנס למים.
             """
         )
+    }
+
+    /// The measurement's own clock time in beach time, not its age.
+    ///
+    /// A forecast is cached for up to half an hour, so "לפני 10 דקות" baked into
+    /// the text at build time is a claim that quietly stops being true. `09:40`
+    /// stays correct however long the banner is on screen.
+    private static func clockTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        if let zone = TimeZone(identifier: "Asia/Jerusalem") { formatter.timeZone = zone }
+        return formatter.string(from: date)
     }
 
     private static func largeSurfAlert(

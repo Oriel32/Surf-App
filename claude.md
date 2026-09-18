@@ -45,176 +45,37 @@ Each arrow is a testable boundary.
 
 ---
 
-# Data Sources: The Three APIs
+# Data Sources: The Four APIs
 
-Open-Meteo Marine (forecast spine), Stormglass (model confidence, ~10 requests/day) and
-ISRAMAR (buoy ground truth, undocumented and partially dead). Endpoint shapes, auth, rate
-limits and their verified failure modes live in the `surf-data-sources` skill - read it
-before touching any ingest client, decoder or cache policy.
+Open-Meteo Marine (forecast spine), Stormglass (model confidence, ~10 requests/day),
+ISRAMAR (buoy ground truth, undocumented and partially dead) and IMS (measured coastal
+wind, token in `.env`). Endpoint shapes, auth, rate limits and their verified failure
+modes live in the `surf-data-sources` skill - read it before touching any ingest client,
+decoder or cache policy.
 
-Two rules are load-bearing enough to repeat here: a 200 from ISRAMAR is **not** evidence of
-fresh data, and the Gulf of Eilat 400s on the marine endpoint rather than returning an empty
-series.
+Three rules are load-bearing enough to repeat here: a 200 from ISRAMAR is **not** evidence
+of fresh data, the Gulf of Eilat 400s on the marine endpoint rather than returning an empty
+series, and an IMS value can be present, numeric and flagged invalid - Eilat's anemometer
+serves `0.0` that way, which a careless decoder publishes as dead calm.
 
 ---
 
 # Domain Rules
 Extracted from `surf_research.md`. These are product requirements, not suggestions. All bands are table-driven and unit-tested.
 
-## Wave height -> local slang
-Displayed as metric value **and** term together, never one alone.
+The calibrated tables — wave-height slang and the break-point energy
+threshold, sea-state texture, wind bands, per-spot coefficients and their
+order of operations, the Eilat synthetic formula, the Match Score weights
+and the longshore current — live in the `surf-domain-rules` skill. Read it
+before touching any threshold, coefficient, band boundary or Hebrew term.
 
-**This table is calibrated against GoSurf, not taken from `surf_research.md`.**
-The research doc's four paired bands were measured against the local market
-leader on 2026-08-27 at Bat Yam and found two to three bands too generous: it
-named a 0.48 m sea `מותן עד חזה` where GoSurf called the same hour `ים גלי`.
-Since GoSurf's swell column agrees with our model input and with the ISRAMAR
-buoy to within 12 cm, the disagreement was the vocabulary, not the physics.
-Evidence and the full side-by-side: `calibration/bat-yam-comparison.md`.
-
-Seven single terms, not paired ranges, and they begin only where waves break:
-
-| Adjusted height at spot | Hebrew | English | Audience |
-|---|---|---|---|
-| < 0.10 m | פלטה | Flat | Nobody |
-| 0.10 m - break point | ים נוח / ים גלי | Calm sea / Wavy sea | Swimmers, not surfers |
-| break point - 0.70 m | קרסול | Ankle | Beginners, SUP |
-| 0.70-0.95 m | ברך | Knee | Beginners |
-| 0.95-1.20 m | מותן | Waist | The golden range - core audience |
-| 1.20-1.45 m | חזה | Chest | Core audience |
-| 1.45-1.70 m | כתף | Shoulder | Experienced |
-| 1.70-2.20 m | ראש | Head | Experienced only |
-| > 2.20 m | פעמיים ראש | Double head | Professionals |
-
-`ים נוח` vs `ים גלי` is texture, not height: glassy or flat reads `ים נוח`,
-anything else reads `ים גלי`. It never affects which anatomical term is chosen.
-
-### The break point
-> גלים נשברים מ-50 ס״מ עם תלות במחזור הגל — GoSurf
-
-Below it there is no wave to name a body part after, and naming one is the
-overstatement that started this. Both halves of their sentence are load-bearing:
-0.6 m of 4-second slop has nothing to catch, and a 0.4 m 12-second groundswell
-stands up and peels. So the threshold is keyed to **energy**, not height:
-
-```
-surf exists when  0.5 * H^2 * T  >=  0.75 kW/m
-```
-
-anchored so 0.50 m at 6 s — this coast's measured median period — is exactly the
-break point. That gives 0.61 m at 4 s, 0.43 m at 8 s, 0.35 m at 12 s.
-Lives in `SurfBreaking`, and reuses the same `0.5 H^2 T` the score already uses.
-
-**Never express a safety threshold as a `WaveBand` case.** This table is product
-vocabulary and gets re-cut when the vocabulary is wrong; a re-cut must not be
-able to move when somebody is warned. See `SkillLevel.largeSurfWarningThresholdMeters`.
-
-## Sea state -> texture
-| State | Hebrew | Condition | Colour |
-|---|---|---|---|
-| Flat | פלטה | 0-0.1 m, Douglas 0-1 | Neutral / grey |
-| Glassy | גלאסי | Swell present + weak or offshore wind | Bright blue - the hero state |
-| Fair | סביר | Everything in between | Neutral |
-| Choppy | צ'ופי | See the three triggers below | Orange / red |
-
-`סביר` is **not** from `surf_research.md`, which names only flat/glassy/choppy.
-A binary glassy-or-choppy misdescribes most real days on this coast, so the
-middle state uses plain Hebrew rather than invented slang. The wording is still
-unconfirmed against a local surfer.
-
-**Choppy has three triggers, and mean wind speed is only one of them.**
-
-1. Onshore or cross-onshore wind at or above 12 kt. *(the obvious one)*
-2. **Wind-sea energy share at or above 0.18** — how much of the sea is local
-   chop rather than swell, measured **at the break, not offshore**.
-3. **Gust at or above 18 kt**, whatever the mean is doing.
-
-Rules 2 and 3 exist because of 2026-08-29 at Bat Yam, where a surfer called the
-sea choppy at 10:00 and the app said `סביר` until noon: the mean wind never left
-the 0-10 kt "ideal" band all morning while the chop went from 11% of the energy
-to 24% and gusts reached 18 kt. Mean speed and direction alone cannot see a sea
-being contaminated by a wind that is technically light.
-
-Rule 2 must be evaluated **after** the spot transform. Long swell shoals up over
-the bar and short chop does not, so the same hour reads 28% offshore and 18% at
-the beach; keyed to the open-sea figure the rule fires an hour early.
-
-The glassy test deliberately runs **before** all three. A calm or offshore
-morning stays `גלאסי` even with an old wind sea still running - the hero state is
-rare and must not be collateral damage from a chop rule.
-
-## Wind
-Coast runs roughly N-S with the sea to the west, so direction maps directly:
-- **West = onshore.** Raises height, destroys shape, hard paddle-out. The default summer afternoon sea breeze.
-- **North / South = side-shore.** Weak (especially northerly) leaves it clean; strong is ideal for kite and windsurf.
-- **East = offshore.** Grooms the face, delays the break, produces glassy and barrelling conditions - *and is the danger case below.*
-
-Strength bands: 0-10 kt weak (surf/SUP ideal) - 10-15 kt moderate (surf degrading, beginner windsurf ideal) - 15+ kt strong (kite/windsurf/wing foil territory, ideal 12-22 kt).
-
-## Spot transformation coefficients
-Multiplier applied to open-sea significant wave height. Data-driven per spot:
-
-| Spot type | Example | Coefficient |
-|---|---|---|
-| Fully exposed | Palmachim, HaTzuk | 0.90 |
-| Typical urban | Tel Aviv, Netanya | 0.85 |
-| Structure-protected | Ashdod, Bat Yam (breakwaters) | 0.72 |
-| Ruin / pier-protected | Caesarea (Roman piers) | 0.70 |
-| Enclosed bay | Haifa Bay | 0.50 |
-
-Order of operations in Phase 3 — **sheltering first, breaking cap last**:
-
-```
-open-sea Hs → × exposureCoefficient → shoaling (Ks) → refraction (Kr) → cap at 0.78 × depth
-```
-
-Breakwaters and headlands block incident energy offshore, before the wave reaches the shoaling zone, so the coefficient belongs at the front. Applying it after the breaking cap would reduce an already-capped height a second time and under-predict every sheltered spot. Refraction returns *nothing* when the swell arrives from behind the shoreline — a south swell at a north-facing beach is shadowed, not merely smaller.
-
-## Gulf of Eilat - special case
-Global wave models do not resolve this basin and their output there is meaningless. Detect `basin == .gulfOfEilat` and switch to synthetic wind-chop values:
-
-```
-Hs = wind_kt * 0.04
-Tp = 3 + (0.15 * wind_kt)
-```
-
-Wind waves only, no swell component. Label it in the UI as locally derived, not modelled.
+The offshore-drift safety alert below deliberately stays here: it is always
+in force and must never depend on that skill being loaded.
 
 ## Safety - the offshore drift alert
 **Offshore (easterly) wind above ~10 kt triggers a prominent, non-dismissable warning.** The hazard is an optical illusion: from the shore the sea looks flat and inviting, but past the wind shadow of the buildings and cliffs the wind hits hard and pushes paddlers out to sea faster than they can paddle back. Warn explicitly against beginners, SUP, and kayaks entering the water, and name the drift risk directly.
 
 This alert is evaluated **before** the Match Score and outranks it in the layout. A glassy offshore morning will score highly for experienced surfers and be genuinely life-threatening for beginners simultaneously - both facts must appear together.
-
-## Match Score (0-100), per sport
-Sport profile is user-selected: surfing, kitesurfing, wing foil, SUP.
-
-**Surfing:** adjusted shore height 0.6-1.5 m scores full on the height term; period <5 s (wind slop) drops the total sharply; 7-9 s raises it; light easterly adds a bonus; westerly >12 kt subtracts heavily for destroyed shape.
-
-**Kitesurfing / wing foil:** the logic inverts - wind carries the dominant weight. 100 requires stable side- or south-westerly wind at 15-22 kt.
-
-**SUP:** rewards flat and calm, and must be suppressed to near-zero by the offshore-wind hazard regardless of how pleasant the surface looks.
-
-**Chop is its own term, separate from period.** Period is read off the dominant
-wave train, so while the swell stays the taller of the two it keeps describing
-clean groundswell no matter how much chop is building underneath - on 2026-08-29
-the reported period *rose* through a session that was falling apart. The score
-therefore reads `windSeaEnergyShare` directly.
-
-## Longshore current
-Water moving *along* the beach, estimated per train (Longuet-Higgins, signed by
-which side of the shore normal the train arrives from) plus the alongshore wind
-component. Two trains on opposite sides of the normal is confused water, not
-merely lumpy water, and is flagged separately as a cross sea.
-
-**This is not the offshore drift hazard and must never be presented as one.**
-That alert is about wind pushing a beginner out to sea, it is non-dismissable,
-and it owns the top of Home alone. A longshore current pushes a surfer down the
-beach - a nuisance and a fitness problem. Adding a second, more frequent banner
-is how people learn to ignore the first.
-
-It informs the **SUP score only** and renders as a Layer 2 readout. **The
-magnitude is provisional**: the mechanism is textbook but one session cannot
-calibrate it, so it stays off the surfing score until the log has more.
 
 ---
 
@@ -229,10 +90,17 @@ The backend lives in `SurfCore/`, a SwiftPM package the app target depends on. K
 ## Two kinds of test, and why both are needed
 
 - **`swift test` — hermetic.** Fixtures only, no network, no clock. Proves the logic is self-consistent. It cannot prove a decoder matches what a provider actually sends.
-- **`swift run smoke [spot] [sport] [skill]` — live.** Hits the real Open-Meteo and ISRAMAR endpoints, runs the full pipeline, and prints the model's answer beside a real buoy measurement. This is the operating loop's step 6 made runnable.
+- **`swift run smoke [spot] [sport] [skill]` — live.** Hits the real Open-Meteo, ISRAMAR and IMS endpoints, runs the full pipeline, and prints the model's answer beside a real buoy measurement and a real anemometer's wind. This is the operating loop's step 6 made runnable.
   - `--at <yyyy-MM-ddTHH:mm>` (Israel time) reports on a chosen hour instead of now. **A field report is always about a time that has already passed** — without this, checking the engine against what someone saw in the water meant having been running it at that hour. `--explain` and the score follow `--at`.
   - `--today` prints the day hour by hour, including the chop share column.
-  - It appends to `calibration/observations.jsonl`, anchored to the repo via `#filePath` — never CWD-relative, because running it from `SurfCore/` used to fork a second ledger silently.
+  - It appends to `calibration/observations.jsonl` (waves) and
+    `calibration/wind_observations.jsonl` (wind), anchored to the repo via `#filePath` —
+    never CWD-relative, because running it from `SurfCore/` used to fork a second ledger
+    silently. Two files, not more columns in one: a new non-optional field on an existing
+    record makes every old line fail to decode and be dropped by the tolerant reader.
+  - The IMS token comes from `IMS_API_TOKEN` in the environment or the gitignored `.env`
+    (see `.env.example`). Without it the wind section says so and everything else runs —
+    a missing token degrades its own section, like a dead station.
 
 **The unit suite passed 83/83 while three real bugs were live**, all found only by the smoke test: Eilat 400ing on the marine endpoint, `bestWindowToday` searching the whole week and returning a window that ran backwards across midnight, and `ewam` silently nulling 77 of 168 hours. Green unit tests are necessary and not sufficient — run the smoke test before believing any ingest change.
 

@@ -89,6 +89,119 @@ struct OffshoreDriftTests {
     }
 }
 
+/// The station is a second witness, and it is only ever allowed to speak up.
+@Suite("Measured wind and the drift alert")
+struct MeasuredWindDriftTests {
+    private func measured(
+        knots: Double,
+        relation: WindRelation = .offshore,
+        at moment: Date = .utc(2026, 9, 18, 6, 40)
+    ) -> MeasuredWind {
+        MeasuredWind(
+            observation: WindObservation(
+                stationID: "178",
+                observedAt: moment,
+                windSpeedMPS: mps(knots: knots),
+                windDirectionDegrees: relation == .offshore ? 90 : 270
+            ),
+            relation: relation,
+            stationNameHebrew: "חוף תל אביב"
+        )
+    }
+
+    private func conditions(
+        modelKnots: Double,
+        modelRelation: WindRelation,
+        measured: MeasuredWind?
+    ) -> SpotConditions {
+        var conditions = SpotConditions.fixture(
+            waveHeightMeters: 0.4,
+            periodSeconds: 6,
+            windSpeedMPS: mps(knots: modelKnots),
+            windRelation: modelRelation,
+            seaState: .glassy
+        )
+        conditions.measuredWind = measured
+        return conditions
+    }
+
+    /// The case this exists for: a glassy dawn where the 9 km model cell has the
+    /// wind at 4 knots and the mast on the beach is reading 12 offshore.
+    @Test("A measured offshore wind raises the alert the model missed")
+    func measuredWindRaisesAlert() throws {
+        let alerts = SafetyEngine.alerts(
+            for: conditions(modelKnots: 4, modelRelation: .offshore, measured: measured(knots: 12)),
+            profile: UserProfile(sport: .surfing, skill: .beginner)
+        )
+
+        let drift = try #require(alerts.first { $0.kind == .offshoreDrift })
+        #expect(drift.severity == .danger)
+        // It quotes the stronger witness, names the station and timestamps it.
+        #expect(drift.hebrewBody.contains("12"))
+        #expect(drift.hebrewBody.contains("חוף תל אביב"))
+        #expect(drift.hebrewBody.contains("09:40"))
+    }
+
+    @Test("A measured onshore wind cannot cancel a modelled offshore hazard")
+    func measurementNeverCancels() throws {
+        // The mast sits behind the same buildings that make the sea look calm
+        // from the sand. A quiet reading is not evidence of a quiet sea.
+        let alerts = SafetyEngine.alerts(
+            for: conditions(
+                modelKnots: 12,
+                modelRelation: .offshore,
+                measured: measured(knots: 20, relation: .onshore)
+            ),
+            profile: UserProfile(sport: .surfing, skill: .beginner)
+        )
+
+        let drift = try #require(alerts.first { $0.kind == .offshoreDrift })
+        #expect(drift.hebrewBody.contains("12"))
+        // The onshore measurement is not quoted as though it were the hazard.
+        #expect(!drift.hebrewBody.contains("חוף תל אביב"))
+    }
+
+    @Test("An onshore model wind with an offshore measurement still warns")
+    func measuredAloneIsEnough() {
+        let alerts = SafetyEngine.alerts(
+            for: conditions(modelKnots: 3, modelRelation: .onshore, measured: measured(knots: 14)),
+            profile: UserProfile(sport: .surfing, skill: .intermediate)
+        )
+        #expect(alerts.contains { $0.kind == .offshoreDrift })
+    }
+
+    @Test("A light measured offshore below the threshold warns nobody")
+    func lightMeasuredWindIsNotAnAlert() {
+        let alerts = SafetyEngine.alerts(
+            for: conditions(modelKnots: 3, modelRelation: .onshore, measured: measured(knots: 5)),
+            profile: UserProfile(sport: .surfing, skill: .intermediate)
+        )
+        #expect(!alerts.contains { $0.kind == .offshoreDrift })
+    }
+
+    @Test("A paddler is held to the beginner threshold on measured wind too")
+    func supIsHeldToTheCautiousThreshold() throws {
+        let alerts = SafetyEngine.alerts(
+            for: conditions(modelKnots: 2, modelRelation: .onshore, measured: measured(knots: 9)),
+            profile: UserProfile(sport: .sup, skill: .advanced)
+        )
+        let drift = try #require(alerts.first { $0.kind == .offshoreDrift })
+        #expect(drift.severity == .danger)
+    }
+
+    @Test("A measured offshore wind crushes the score, not just the banner")
+    func measuredWindSuppressesScore() {
+        let profile = UserProfile(sport: .surfing, skill: .beginner)
+        let calm = conditions(modelKnots: 4, modelRelation: .offshore, measured: nil)
+        let blowing = conditions(modelKnots: 4, modelRelation: .offshore, measured: measured(knots: 14))
+
+        // A banner beside an 80 is an argument the banner loses, so the score has
+        // to move with the measurement that raised the alert.
+        #expect(MatchScoreEngine.score(for: blowing, profile: profile).value
+                < MatchScoreEngine.score(for: calm, profile: profile).value)
+    }
+}
+
 @Suite("Large surf hazard")
 struct LargeSurfTests {
     private func conditions(heightMeters: Double) -> SpotConditions {

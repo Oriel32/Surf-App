@@ -43,23 +43,30 @@ public enum Geo {
 ///
 /// So the reading is shown everywhere and the distance is shown with it. The
 /// user gets ground truth and the context to judge how much of it applies.
-public struct BuoyReference: Sendable, Equatable {
+public struct StationReference: Sendable, Equatable {
     public let stationID: String
     public let nameHebrew: String
     public let distanceKilometres: Double
-    /// Bearing from the spot toward the buoy, degrees true.
+    /// Bearing from the spot toward the station, degrees true.
     public let bearingDegrees: Double
+
+    /// What kind of instrument this is, as the word Hebrew uses for it: a buoy
+    /// (`מצוף`) or a weather station (`תחנה`). Carried rather than inferred so
+    /// one summary line serves both without a second nearly identical type.
+    public let instrumentHebrew: String
 
     public init(
         stationID: String,
         nameHebrew: String,
         distanceKilometres: Double,
-        bearingDegrees: Double
+        bearingDegrees: Double,
+        instrumentHebrew: String = "מצוף"
     ) {
         self.stationID = stationID
         self.nameHebrew = nameHebrew
         self.distanceKilometres = distanceKilometres
         self.bearingDegrees = bearingDegrees
+        self.instrumentHebrew = instrumentHebrew
     }
 
     public var direction: CompassPoint {
@@ -78,7 +85,11 @@ public struct BuoyReference: Sendable, Equatable {
     public var hebrewSummary: String {
         let km = HebrewText.ltr(String(format: "%.0f", distanceKilometres))
         return isLocal
-            ? "מצוף \(nameHebrew)"
-            : "מצוף \(nameHebrew) · \(km) ק״מ \(direction.hebrewNoun)"
+            ? "\(instrumentHebrew) \(nameHebrew)"
+            : "\(instrumentHebrew) \(nameHebrew) · \(km) ק״מ \(direction.hebrewNoun)"
     }
 }
+
+/// The wave buoy case, which is what this type was born as and what every
+/// existing call site means by it.
+public typealias BuoyReference = StationReference

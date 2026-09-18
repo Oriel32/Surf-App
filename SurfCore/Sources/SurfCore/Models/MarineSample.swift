@@ -197,6 +197,64 @@ public struct BuoyObservation: Sendable, Equatable {
     }
 }
 
+/// A real wind measurement from a real weather station, with the timestamp that
+/// makes it trustworthy or worthless.
+///
+/// The wind counterpart to `BuoyObservation`. Israel has one live wave buoy and
+/// roughly eighty-five land stations, so wind is the parameter this app can
+/// actually check against an instrument rather than against another model — and
+/// wind is what the drift alert, the sea state and every score turn on.
+///
+/// ## A station is not the beach
+/// This is measured at a mast somewhere near the spot, not over the water at the
+/// break. It is evidence about the wind, not a reading of it, which is why it is
+/// displayed with its distance and why it is allowed to *raise* a safety alert
+/// and never to cancel one.
+public struct WindObservation: Sendable, Equatable {
+    public let stationID: String
+    public let observedAt: Date
+    /// Mean wind speed, m/s — SI, as the station already reports it.
+    public let windSpeedMPS: Double
+    /// Direction the wind blows *from*, degrees true.
+    public let windDirectionDegrees: Double
+    /// Peak gust, m/s, where the station measures one.
+    public let windGustMPS: Double?
+    public let airTemperatureC: Double?
+
+    public init(
+        stationID: String,
+        observedAt: Date,
+        windSpeedMPS: Double,
+        windDirectionDegrees: Double,
+        windGustMPS: Double? = nil,
+        airTemperatureC: Double? = nil
+    ) {
+        self.stationID = stationID
+        self.observedAt = observedAt
+        self.windSpeedMPS = windSpeedMPS
+        self.windDirectionDegrees = windDirectionDegrees
+        self.windGustMPS = windGustMPS
+        self.airTemperatureC = airTemperatureC
+    }
+
+    public func age(asOf now: Date = Date()) -> TimeInterval {
+        now.timeIntervalSince(observedAt)
+    }
+
+    /// Wind is a far more perishable measurement than a sea state: a land breeze
+    /// dies and a sea breeze fills in over a single hour, so an hour-old reading
+    /// is the oldest one that can honestly be called "now". Compare the buoy's
+    /// three hours, which describes a swell that takes a day to change.
+    ///
+    /// A future-dated reading is rejected rather than trusted — that is the shape
+    /// a timezone bug takes, and the IMS timestamps are quoted in local *standard*
+    /// time all year round.
+    public func isFresh(asOf now: Date = Date(), maxAge: TimeInterval = 3600) -> Bool {
+        let elapsed = age(asOf: now)
+        return elapsed >= 0 && elapsed <= maxAge
+    }
+}
+
 /// Per-parameter disagreement between forecast models, for one hour.
 ///
 /// Confidence is measured, never asserted: it is the spread between independent

@@ -1,0 +1,15 @@
+# The calibration ledgers are append-only JSON Lines and are read back by
+# SurfCore. Checked out with CRLF they were silently unreadable: Swift treats
+# "\r\n" as one grapheme, so a split on "\n" did not split them, and every
+# historical record vanished behind a tolerant decoder. The reader now handles
+# both, and this keeps the files LF so the question cannot come back.
+*.jsonl text eol=lf
+
+# Shell scripts must be LF or WSL rejects the shebang outright:
+# `/usr/bin/env: 'bash\r': No such file or directory`.
+*.sh text eol=lf
+
+# Swift, JSON and Markdown normalise to LF in the repository.
+*.swift text eol=lf
+*.json text eol=lf
+*.md text eol=lf

@@ -194,6 +194,37 @@ public enum SeaState: String, Sendable, Equatable, CaseIterable {
     }
 }
 
+/// A measured wind reading, placed against one particular beach.
+///
+/// The station reports a speed and a bearing; whether that bearing is offshore
+/// is a fact about the shoreline it is being read against, so the relation is
+/// resolved once, here, with the same `Compass.windRelation` the model wind goes
+/// through. Haifa Bay faces north-west and Eilat faces south — an easterly is
+/// not offshore everywhere.
+public struct MeasuredWind: Sendable, Equatable {
+    public let observation: WindObservation
+    public let relation: WindRelation
+    /// For the alert and the readout: a measurement is only credible if it says
+    /// where it was taken.
+    public let stationNameHebrew: String
+
+    public init(observation: WindObservation, relation: WindRelation, stationNameHebrew: String) {
+        self.observation = observation
+        self.relation = relation
+        self.stationNameHebrew = stationNameHebrew
+    }
+
+    public var observedAt: Date { observation.observedAt }
+
+    public var speedKnots: Double {
+        Units.knots(fromMetersPerSecond: observation.windSpeedMPS)
+    }
+
+    public var gustKnots: Double? {
+        observation.windGustMPS.map { Units.knots(fromMetersPerSecond: $0) }
+    }
+}
+
 /// The transformed, spot-specific, presentable conditions.
 ///
 /// This — not `RawMarineSample` — is what the UI renders.
@@ -267,6 +298,20 @@ public struct SpotConditions: Sendable, Equatable {
 
     /// Gust speed, m/s, where the source reports it.
     public let windGustMPS: Double?
+
+    /// What a nearby station actually measured, when this hour is the hour
+    /// happening now and the reading is fresh. `nil` on every forecast hour,
+    /// which is all of them for a day that has not arrived yet.
+    ///
+    /// A `var` so the repository can attach the measurement to the current hour
+    /// after the transform without a twenty-argument copy. Everything else here
+    /// stays immutable: this is the one field that comes from outside the model.
+    ///
+    /// The engine reads it in exactly one place — `SafetyEngine`, where a
+    /// measured offshore wind can raise the drift alert the model missed. Sea
+    /// state, height and score stay model-driven until the calibration ledger
+    /// shows a station tracks its beach.
+    public var measuredWind: MeasuredWind?
 
     /// Whether this hour is between sunrise and sunset at the spot. A forecast
     /// that recommends 03:00 is not wrong, it is useless.
@@ -417,7 +462,8 @@ public struct SpotConditions: Sendable, Equatable {
         isCrossSea: Bool = false,
         longshoreCurrentMPS: Double? = nil,
         openSeaSwellHeightMeters: Double? = nil,
-        openSeaSwellPeriodSeconds: Double? = nil
+        openSeaSwellPeriodSeconds: Double? = nil,
+        measuredWind: MeasuredWind? = nil
     ) {
         self.timestamp = timestamp
         self.spotID = spotID
@@ -438,6 +484,7 @@ public struct SpotConditions: Sendable, Equatable {
         self.isSynthetic = isSynthetic
         self.breakingLimitMeters = breakingLimitMeters
         self.windGustMPS = windGustMPS
+        self.measuredWind = measuredWind
         self.isDaylight = isDaylight
         self.seaSurfaceTemperatureC = seaSurfaceTemperatureC
         self.airTemperatureC = airTemperatureC

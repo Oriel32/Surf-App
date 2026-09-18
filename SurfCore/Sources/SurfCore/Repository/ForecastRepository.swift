@@ -1,13 +1,20 @@
 import Foundation
 
-/// What the buoy layer is currently able to say. Modelled as three explicit
+/// What an instrument layer is currently able to say. Modelled as three explicit
 /// cases because "no reading" and "an old reading" are different facts, and
 /// collapsing them is how a stale storm value ends up on screen as live.
-public enum BuoyStatus: Sendable, Equatable {
-    case fresh(BuoyObservation)
-    case stale(BuoyObservation, age: TimeInterval)
+///
+/// Generic over the reading so the wave buoy and the wind station share one
+/// vocabulary: both serve HTTP 200 with data of unknown age, and both have to be
+/// able to say "this is old" rather than pretending or going blank.
+public enum ObservationStatus<Reading: Sendable & Equatable>: Sendable, Equatable {
+    case fresh(Reading)
+    case stale(Reading, age: TimeInterval)
     case unavailable
 }
+
+public typealias BuoyStatus = ObservationStatus<BuoyObservation>
+public typealias WindStatus = ObservationStatus<WindObservation>
 
 /// Everything the UI needs for one spot, already transformed, scored and checked.
 public struct SpotForecast: Sendable {
@@ -17,6 +24,10 @@ public struct SpotForecast: Sendable {
     /// Where the buoy behind `buoy` sits relative to this spot, so the reading
     /// can be shown with the distance that makes it honest.
     public let buoyReference: BuoyReference?
+    /// Measured wind from the nearest coastal station — the model's other
+    /// witness. Shown beside the forecast wind rather than replacing it.
+    public let wind: WindStatus
+    public let windReference: StationReference?
     /// 0...1 model agreement, or `nil` when no ensemble source was configured.
     public let confidence: Double?
     public let generatedAt: Date
@@ -28,6 +39,8 @@ public struct SpotForecast: Sendable {
         hours: [HourlyForecast],
         buoy: BuoyStatus,
         buoyReference: BuoyReference? = nil,
+        wind: WindStatus = .unavailable,
+        windReference: StationReference? = nil,
         confidence: Double? = nil,
         generatedAt: Date
     ) {
@@ -35,6 +48,8 @@ public struct SpotForecast: Sendable {
         self.hours = hours
         self.buoy = buoy
         self.buoyReference = buoyReference
+        self.wind = wind
+        self.windReference = windReference
         self.confidence = confidence
         self.generatedAt = generatedAt
     }
@@ -70,9 +85,11 @@ public actor ForecastRepository {
     private let primary: any ForecastSource
     private let ensemble: (any ModelEnsembleSource)?
     private let observations: (any ObservationSource)?
+    private let windObservations: (any WindObservationSource)?
     private let clock: @Sendable () -> Date
     private let cacheTTL: TimeInterval
     private let maxObservationAge: TimeInterval
+    private let maxWindObservationAge: TimeInterval
 
     private enum CacheEntry {
         case inProgress(Task<SpotForecast, Error>)
@@ -96,19 +113,26 @@ public actor ForecastRepository {
     ///     Stormglass, burns a request budget of about ten calls a day.
     ///   - clock: injected so cache expiry and staleness are testable without
     ///     waiting for real time to pass.
+    ///   - maxWindObservationAge: shorter than the buoy's, because wind is the
+    ///     more perishable measurement — a land breeze dies and a sea breeze
+    ///     fills in inside an hour, while a swell takes a day to change.
     public init(
         primary: any ForecastSource,
         ensemble: (any ModelEnsembleSource)? = nil,
         observations: (any ObservationSource)? = nil,
+        windObservations: (any WindObservationSource)? = nil,
         cacheTTL: TimeInterval = 30 * 60,
         maxObservationAge: TimeInterval = 3 * 3600,
+        maxWindObservationAge: TimeInterval = 3600,
         clock: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.primary = primary
         self.ensemble = ensemble
         self.observations = observations
+        self.windObservations = windObservations
         self.cacheTTL = cacheTTL
         self.maxObservationAge = maxObservationAge
+        self.maxWindObservationAge = maxWindObservationAge
         self.clock = clock
     }
 
@@ -189,11 +213,34 @@ public actor ForecastRepository {
         async let samplesTask = primary.forecast(for: spot)
         async let confidenceTask = bestEffortConfidence(for: spot)
         async let buoyTask = bestEffortObservation(for: spot)
+        async let windTask = bestEffortWind(for: spot)
 
         let samples = try await samplesTask
+        let wind = await windTask
+        let windStation = spot.windStationID.flatMap { ImsClient.stations[$0] }
+
+        // A measurement only ever describes the hour it was taken in. Attaching
+        // it to the whole series would put a 07:00 reading behind tomorrow
+        // afternoon's score, which is the "interpolate a gap and present it as an
+        // observation" mistake wearing a different hat.
+        let now = clock()
+        let measured: MeasuredWind? = {
+            guard case .fresh(let reading) = wind, let station = windStation else { return nil }
+            return MeasuredWind(
+                observation: reading,
+                relation: Compass.windRelation(
+                    windFromDegrees: reading.windDirectionDegrees,
+                    shorelineNormalDegrees: spot.shorelineNormalDegrees
+                ),
+                stationNameHebrew: station.nameHebrew
+            )
+        }()
 
         let hours = samples.map { sample -> HourlyForecast in
-            let conditions = WaveTransform.transform(sample, at: spot)
+            var conditions = WaveTransform.transform(sample, at: spot)
+            if let measured, Self.isCurrentHour(sample.timestamp, now: now) {
+                conditions.measuredWind = measured
+            }
             return HourlyForecast(
                 conditions: conditions,
                 score: MatchScoreEngine.score(for: conditions, profile: profile),
@@ -208,9 +255,18 @@ public actor ForecastRepository {
             buoyReference: spot.buoyStationID
                 .flatMap { IsramarClient.stations[$0] }
                 .map { IsramarClient.reference(for: $0, from: spot) },
+            wind: wind,
+            windReference: windStation.map { ImsClient.reference(for: $0, from: spot) },
             confidence: await confidenceTask,
             generatedAt: clock()
         )
+    }
+
+    /// The hourly sample the user is standing in: the one whose hour contains
+    /// `now`.
+    static func isCurrentHour(_ timestamp: Date, now: Date) -> Bool {
+        let elapsed = now.timeIntervalSince(timestamp)
+        return elapsed >= 0 && elapsed < 3600
     }
 
     private func bestEffortConfidence(for spot: Spot) async -> Double? {
@@ -236,6 +292,23 @@ public actor ForecastRepository {
         // Deliberately surfaced rather than dropped: "the buoy is offline" is
         // useful information, and it is the only way the UI can avoid showing a
         // months-old storm reading as the current sea.
+        return .stale(reading, age: reading.age(asOf: now))
+    }
+
+    /// Same contract as the buoy: a failure here degrades this section only.
+    /// A dead weather station must never blank a forecast.
+    private func bestEffortWind(for spot: Spot) async -> WindStatus {
+        guard let windObservations, let stationID = spot.windStationID else { return .unavailable }
+        guard let reading = try? await windObservations.latestWind(stationID: stationID) else {
+            return .unavailable
+        }
+
+        let now = clock()
+        if reading.isFresh(asOf: now, maxAge: maxWindObservationAge) {
+            return .fresh(reading)
+        }
+        // Stale wind is shown with its age and attached to no hour: a reading
+        // from before the sea breeze filled in describes a sea that is gone.
         return .stale(reading, age: reading.age(asOf: now))
     }
 }

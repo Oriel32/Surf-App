@@ -68,6 +68,15 @@ public struct Spot: Sendable, Codable, Equatable, Identifiable {
     /// Nearest ISRAMAR station, when one is close enough to be a useful check.
     public let buoyStationID: String?
 
+    /// Nearest IMS weather station measuring wind, when one sits on this stretch
+    /// of coast.
+    ///
+    /// `nil` is a real answer, not a gap: an inland station a few kilometres back
+    /// from the beach reads a different wind entirely — the sea breeze is a
+    /// coastal phenomenon — and quoting one as "the wind at the beach" is exactly
+    /// the kind of plausible-looking number this project refuses to ship.
+    public let windStationID: String?
+
     /// The sector this break is open to. `nil` means "no sector data", which
     /// leaves refraction as the only shadowing — the behaviour before windows
     /// existed.
@@ -89,6 +98,7 @@ public struct Spot: Sendable, Codable, Equatable, Identifiable {
         shorelineNormalDegrees: Double,
         breakDepthMeters: Double,
         buoyStationID: String? = nil,
+        windStationID: String? = nil,
         swellWindow: SwellWindow? = nil
     ) {
         self.id = id
@@ -101,6 +111,7 @@ public struct Spot: Sendable, Codable, Equatable, Identifiable {
         self.shorelineNormalDegrees = shorelineNormalDegrees
         self.breakDepthMeters = breakDepthMeters
         self.buoyStationID = buoyStationID
+        self.windStationID = windStationID
         self.swellWindow = swellWindow
     }
 }

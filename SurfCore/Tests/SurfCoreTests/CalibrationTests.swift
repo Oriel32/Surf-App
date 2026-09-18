@@ -152,3 +152,137 @@ struct CalibrationTests {
         #expect(try CalibrationLog.read(from: url).isEmpty)
     }
 }
+
+@Suite("Wind calibration log")
+struct WindCalibrationTests {
+    private func record(
+        spot: String = "bat-yam",
+        modelMPS: Double,
+        modelDirection: Double,
+        measuredMPS: Double,
+        measuredDirection: Double
+    ) -> WindCalibrationRecord {
+        WindCalibrationRecord(
+            recordedAt: .utc(2026, 9, 18, 9, 0),
+            spotID: spot,
+            stationID: "178",
+            observedAt: .utc(2026, 9, 18, 8, 50),
+            stationDistanceKilometres: 4.9,
+            modelWindSpeedMPS: modelMPS,
+            modelWindDirectionDegrees: modelDirection,
+            modelWindGustMPS: nil,
+            measuredWindSpeedMPS: measuredMPS,
+            measuredWindDirectionDegrees: measuredDirection,
+            measuredWindGustMPS: nil
+        )
+    }
+
+    @Test("Bias is signed: positive means the model blew harder than the coast")
+    func biasIsSigned() {
+        let modelWindier = record(modelMPS: 8, modelDirection: 270, measuredMPS: 5, measuredDirection: 270)
+        #expect(modelWindier.speedBiasKnots > 0)
+        #expect(abs(modelWindier.speedBiasKnots - Units.knots(fromMetersPerSecond: 3)) < 1e-9)
+    }
+
+    /// The live run on 2026-09-18 compared 246° against 158°: a plain subtraction
+    /// is fine there, but 350 against 10 is a twenty-degree disagreement and
+    /// subtraction calls it 340.
+    @Test("Direction error wraps around north")
+    func directionErrorWrapsAroundNorth() {
+        let wrapping = record(modelMPS: 5, modelDirection: 350, measuredMPS: 5, measuredDirection: 10)
+        #expect(abs(wrapping.directionErrorDegrees - 20) < 1e-9)
+    }
+
+    /// The only direction question the safety layer asks.
+    @Test("Agreement is measured on whether the wind blows off the land")
+    func offshoreAgreementIsWhatCounts() {
+        // A west-facing beach: 270 is onshore, 90 is offshore.
+        let bothOnshore = record(modelMPS: 5, modelDirection: 250, measuredMPS: 6, measuredDirection: 280)
+        let disagreeing = record(modelMPS: 5, modelDirection: 270, measuredMPS: 6, measuredDirection: 90)
+
+        let agreeing = WindCalibrationLog.summarise([bothOnshore], shorelineNormalDegrees: 270)
+        #expect(agreeing.offshoreAgreementRate == 1.0)
+
+        let mixed = WindCalibrationLog.summarise([bothOnshore, disagreeing], shorelineNormalDegrees: 270)
+        #expect(mixed.offshoreAgreementRate == 0.5)
+    }
+
+    @Test("An empty history summarises to zero rather than a division by zero")
+    func emptyIsSafe() {
+        let summary = WindCalibrationLog.summarise([], shorelineNormalDegrees: 270)
+        #expect(summary.count == 0)
+        #expect(summary.speedRMSEKnots == 0)
+    }
+
+    @Test("Wind records survive a round trip, in their own file")
+    func roundTrips() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("wind-\(UUID().uuidString)")
+            .appendingPathComponent("wind_observations.jsonl")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        try WindCalibrationLog.append(record(modelMPS: 5, modelDirection: 270, measuredMPS: 8, measuredDirection: 266), to: url)
+        try WindCalibrationLog.append(record(modelMPS: 6, modelDirection: 250, measuredMPS: 7, measuredDirection: 260), to: url)
+
+        let read = try WindCalibrationLog.read(from: url)
+        #expect(read.count == 2)
+        #expect(abs(read[1].measuredWindSpeedMPS - 7) < 1e-9)
+        #expect(read[0].stationDistanceKilometres == 4.9)
+    }
+
+    /// The reason wind got its own ledger. The wave log is read with a tolerant
+    /// decoder, so a record type that gained a required field would drop every
+    /// line already on disk — silently, and only the history can ever tune a
+    /// coefficient.
+    @Test("The wave ledger still decodes its existing lines")
+    func waveLedgerIsUntouched() throws {
+        let committed = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // SurfCoreTests
+            .deletingLastPathComponent()   // Tests
+            .deletingLastPathComponent()   // SurfCore
+            .deletingLastPathComponent()   // repo root
+            .appendingPathComponent("calibration")
+            .appendingPathComponent("observations.jsonl")
+
+        let lines = (try? String(contentsOf: committed, encoding: .utf8))?
+            .split(whereSeparator: \.isNewline).count ?? 0
+        let decoded = try CalibrationLog.read(from: committed).count
+        #expect(lines > 0, "the committed ledger is empty — did it get truncated?")
+        #expect(decoded == lines, "path \(committed.path): \(lines) lines, \(decoded) decoded")
+    }
+
+    /// The bug this caught on 2026-09-18, and the reason `.gitattributes` now
+    /// pins these files to LF.
+    ///
+    /// Swift treats "\r\n" as a single grapheme that does not equal "\n", so a
+    /// `split(separator: "\n")` over a CRLF ledger returns the entire file as one
+    /// line, which then fails to decode and is dropped by the tolerant reader —
+    /// silently, because tolerance is the whole point of that reader. Git checks
+    /// these files out with CRLF on this machine, so eleven Bat Yam observations
+    /// were invisible while the smoke test cheerfully reported "0 observation(s)
+    /// for this spot".
+    @Test("A ledger with Windows line endings is read, not silently emptied")
+    func readsCRLFLedger() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("crlf-\(UUID().uuidString)")
+            .appendingPathComponent("observations.jsonl")
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+
+        // Written the way a Windows checkout leaves it.
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let one = try encoder.encode(record(modelMPS: 5, modelDirection: 270, measuredMPS: 8, measuredDirection: 266))
+        let two = try encoder.encode(record(modelMPS: 6, modelDirection: 250, measuredMPS: 7, measuredDirection: 260))
+        var crlf = Data()
+        for line in [one, two] {
+            crlf.append(line)
+            crlf.append(contentsOf: [0x0D, 0x0A])
+        }
+        try crlf.write(to: url)
+
+        #expect(try WindCalibrationLog.read(from: url).count == 2)
+    }
+}

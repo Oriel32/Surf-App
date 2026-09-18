@@ -74,6 +74,16 @@ public protocol ObservationSource: Sendable {
     func latestObservation(stationID: String) async throws -> BuoyObservation
 }
 
+/// A source of measured wind from a land station.
+///
+/// Separate from `ObservationSource` rather than generic over it: a wave buoy
+/// and a weather mast measure different things, and forcing one protocol over
+/// both would hand every caller an optional it has to unwrap for the half it
+/// does not want.
+public protocol WindObservationSource: Sendable {
+    func latestWind(stationID: String) async throws -> WindObservation
+}
+
 /// Date formatters are handed out as fresh instances rather than shared statics.
 ///
 /// `DateFormatter` and `ISO8601DateFormatter` are classes with mutable state and
@@ -88,6 +98,48 @@ enum DateParsing {
 
     /// ISRAMAR: "2026-08-25 16:00 UTC".
     static let isramarFormat = "yyyy-MM-dd HH:mm 'UTC'"
+
+    /// IMS quotes every timestamp in Israel *standard* time — winter time — all
+    /// year round, while still printing a `+03:00` offset for half of it.
+    ///
+    /// Verified live on 2026-09-18: `2026-09-18T10:50:00+03:00` was served when
+    /// the local time was 09:10 IDT. Believing the offset dates that reading 1 h
+    /// 20 min into the past, which would silently fail every freshness gate all
+    /// summer; reading the wall clock at +02:00 puts it twenty minutes ago, which
+    /// is what a ten-minute cadence produces.
+    static let imsStandardOffsetSeconds = 2 * 3600
+
+    /// Reads "2026-09-18T10:50:00+03:00" as 10:50 standard time, discarding the
+    /// offset the payload prints.
+    ///
+    /// The truncation is the whole mechanism, so it is spelled out here rather
+    /// than hidden in a format string: a format of `…ssZZZZZ` would parse the
+    /// offset and honour it, which is precisely the bug.
+    static func imsDate(from string: String, using formatter: DateFormatter) -> Date? {
+        formatter.date(from: String(string.prefix(19)))
+    }
+
+    /// IMS: "2026-09-18T10:50:00+03:00" — the trailing offset is deliberately
+    /// *not* parsed. Change this one constant if IMS ever starts quoting real
+    /// local time; `ImsTests` pins the current behaviour.
+    static func makeIMSFormatter() -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        formatter.timeZone = TimeZone(secondsFromGMT: imsStandardOffsetSeconds)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter
+    }
+
+    /// `YYYY/MM/DD` for the IMS daily endpoint, in the same standard time the
+    /// payload is quoted in — asking for the wrong day near midnight is how an
+    /// hour goes missing.
+    static func imsDayPath(for moment: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy/MM/dd"
+        formatter.timeZone = TimeZone(secondsFromGMT: imsStandardOffsetSeconds)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter.string(from: moment)
+    }
 
     static func makeUTCFormatter(_ format: String) -> DateFormatter {
         let formatter = DateFormatter()

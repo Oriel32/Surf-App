@@ -1,0 +1,127 @@
+{
+ "stationId": 178,
+ "data": [
+  {
+   "datetime": "2026-09-18T10:50:00+03:00",
+   "channels": [
+    {
+     "id": 1,
+     "name": "Rain",
+     "alias": null,
+     "value": 0.0,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 2,
+     "name": "WSmax",
+     "alias": null,
+     "value": 10.5,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 3,
+     "name": "WDmax",
+     "alias": null,
+     "value": 264.0,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 4,
+     "name": "WS",
+     "alias": null,
+     "value": 8.2,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 5,
+     "name": "WD",
+     "alias": null,
+     "value": 266.0,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 6,
+     "name": "STDwd",
+     "alias": null,
+     "value": 7.5,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 7,
+     "name": "TD",
+     "alias": null,
+     "value": 29.9,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 8,
+     "name": "RH",
+     "alias": null,
+     "value": 63.0,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 9,
+     "name": "TDmax",
+     "alias": null,
+     "value": 30.1,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 10,
+     "name": "TDmin",
+     "alias": null,
+     "value": 29.8,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 11,
+     "name": "WS1mm",
+     "alias": null,
+     "value": 9.3,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 12,
+     "name": "Ws10mm",
+     "alias": null,
+     "value": 8.2,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 13,
+     "name": "Time",
+     "alias": null,
+     "value": 1047.0,
+     "status": 1,
+     "valid": true,
+     "description": null
+    }
+   ]
+  }
+ ]
+}

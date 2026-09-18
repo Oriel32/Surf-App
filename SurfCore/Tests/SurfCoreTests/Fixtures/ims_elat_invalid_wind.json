@@ -1,0 +1,172 @@
+{
+ "stationId": 64,
+ "data": [
+  {
+   "datetime": "2026-09-18T10:50:00+03:00",
+   "channels": [
+    {
+     "id": 1,
+     "name": "WSmax",
+     "alias": null,
+     "value": 0.0,
+     "status": 2,
+     "valid": false,
+     "description": null
+    },
+    {
+     "id": 2,
+     "name": "WDmax",
+     "alias": null,
+     "value": 0.0,
+     "status": 2,
+     "valid": false,
+     "description": null
+    },
+    {
+     "id": 3,
+     "name": "WS",
+     "alias": null,
+     "value": 0.0,
+     "status": 2,
+     "valid": false,
+     "description": null
+    },
+    {
+     "id": 4,
+     "name": "WD",
+     "alias": null,
+     "value": 0.0,
+     "status": 2,
+     "valid": false,
+     "description": null
+    },
+    {
+     "id": 5,
+     "name": "STDwd",
+     "alias": null,
+     "value": 0.0,
+     "status": 2,
+     "valid": false,
+     "description": null
+    },
+    {
+     "id": 6,
+     "name": "TD",
+     "alias": null,
+     "value": 35.2,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 7,
+     "name": "RH",
+     "alias": null,
+     "value": 32.0,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 8,
+     "name": "TDmax",
+     "alias": null,
+     "value": 35.4,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 9,
+     "name": "TDmin",
+     "alias": null,
+     "value": 35.0,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 10,
+     "name": "WS1mm",
+     "alias": null,
+     "value": 0.0,
+     "status": 2,
+     "valid": false,
+     "description": null
+    },
+    {
+     "id": 12,
+     "name": "Grad",
+     "alias": null,
+     "value": 818.0,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 13,
+     "name": "NIP",
+     "alias": null,
+     "value": 0.0,
+     "status": 2,
+     "valid": false,
+     "description": null
+    },
+    {
+     "id": 14,
+     "name": "DiffR",
+     "alias": null,
+     "value": 0.0,
+     "status": 2,
+     "valid": false,
+     "description": null
+    },
+    {
+     "id": 17,
+     "name": "Rain",
+     "alias": null,
+     "value": 0.0,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 21,
+     "name": "Ws10mm",
+     "alias": null,
+     "value": 0.0,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 22,
+     "name": "Time",
+     "alias": null,
+     "value": 1040.0,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 23,
+     "name": "BP",
+     "alias": null,
+     "value": 1008.25,
+     "status": 1,
+     "valid": true,
+     "description": null
+    },
+    {
+     "id": 28,
+     "name": "TW",
+     "alias": null,
+     "value": -999.0,
+     "status": 2,
+     "valid": false,
+     "description": null
+    }
+   ]
+  }
+ ]
+}

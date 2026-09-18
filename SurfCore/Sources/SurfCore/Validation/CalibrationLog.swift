@@ -168,7 +168,7 @@ public struct CalibrationSummary: Sendable, Equatable {
 public enum CalibrationLog {
     /// JSON Lines: one record per line, appended, never rewritten. A crash mid
     /// write costs one line rather than the whole history.
-    public static func append(_ record: CalibrationRecord, to url: URL) throws {
+    public static func append<Record: Encodable>(_ record: Record, to url: URL) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         var line = try encoder.encode(record)
@@ -189,13 +189,28 @@ public enum CalibrationLog {
     /// Tolerates a corrupt line rather than losing the file: a half-written
     /// record from an interrupted run must not make the history unreadable.
     public static func read(from url: URL) throws -> [CalibrationRecord] {
+        try read(CalibrationRecord.self, from: url)
+    }
+
+    /// The same reader for any record type. Each ledger keeps its own file: a
+    /// new non-optional field added to an existing record type would make every
+    /// old line fail to decode and be silently dropped by the `try?` above, and
+    /// the history is the only thing a coefficient can ever be tuned against.
+    public static func read<Record: Decodable>(_ type: Record.Type, from url: URL) throws -> [Record] {
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let text = try String(contentsOf: url, encoding: .utf8)
-        return text.split(separator: "\n").compactMap { line in
+        // `whereSeparator: \.isNewline`, not `separator: "\n"`. Swift treats
+        // "\r\n" as a single grapheme that is not equal to "\n", so splitting on
+        // "\n" does not split a CRLF file at all: the whole history arrives as
+        // one unparseable blob and the tolerant `try?` below drops it without a
+        // word. This machine checks the ledger out with CRLF, and the effect was
+        // that all fifteen committed observations were invisible — the smoke test
+        // reported "0 observation(s) for this spot" for a beach with eleven.
+        return text.split(whereSeparator: \.isNewline).compactMap { line in
             guard let data = line.data(using: .utf8) else { return nil }
-            return try? decoder.decode(CalibrationRecord.self, from: data)
+            return try? decoder.decode(Record.self, from: data)
         }
     }
 

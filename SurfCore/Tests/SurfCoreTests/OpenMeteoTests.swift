@@ -2,10 +2,20 @@ import Foundation
 import Testing
 @testable import SurfCore
 
-/// Records which endpoints a client actually calls.
+/// Records which endpoints a client actually calls, and what it sent with them.
+///
+/// Headers are recorded because one client now authenticates: IMS. A test that
+/// only sees URLs cannot tell an `Authorization` header from a token pasted into
+/// a query string, and the difference is whether the secret leaks into caches
+/// and logs.
 actor URLRecorder {
     private(set) var urls: [URL] = []
-    func record(_ url: URL) { urls.append(url) }
+    private(set) var headers: [[String: String]] = []
+
+    func record(_ url: URL, headers sent: [String: String]) {
+        urls.append(url)
+        headers.append(sent)
+    }
 }
 
 struct RecordingTransport: HTTPTransport {
@@ -13,7 +23,7 @@ struct RecordingTransport: HTTPTransport {
     let recorder: URLRecorder
 
     func data(from url: URL, headers: [String: String]) async throws -> Data {
-        await recorder.record(url)
+        await recorder.record(url, headers: headers)
         return payload
     }
 }

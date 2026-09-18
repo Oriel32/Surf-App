@@ -53,7 +53,8 @@ extension Spot {
         shorelineNormalDegrees: Double = 270,
         breakDepthMeters: Double = 2.0,
         basin: Basin = .mediterranean,
-        buoyStationID: String? = nil
+        buoyStationID: String? = nil,
+        windStationID: String? = nil
     ) -> Spot {
         Spot(
             id: id,
@@ -65,7 +66,8 @@ extension Spot {
             exposureCoefficient: exposureCoefficient,
             shorelineNormalDegrees: shorelineNormalDegrees,
             breakDepthMeters: breakDepthMeters,
-            buoyStationID: buoyStationID
+            buoyStationID: buoyStationID,
+            windStationID: windStationID
         )
     }
 }
